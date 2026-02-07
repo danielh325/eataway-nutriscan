@@ -6,27 +6,47 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are a precise food menu analyzer. Your job is to extract dish names from menu images and provide verified nutritional estimates.
+const SYSTEM_PROMPT = `You are an expert food menu analyzer with deep knowledge of culinary techniques, ingredient compositions, and nutritional science. Your task is to extract dish names from menu images and provide verified nutritional estimates.
 
-CRITICAL RULES:
-1. NEVER hallucinate numbers. If you're uncertain, use ranges.
-2. NEVER invent ingredients not visible or inferable from the menu.
-3. For portions not specified, use industry-standard serving ranges.
-4. Confidence levels:
-   - "high": Exact match found in nutrition databases + clear portion
-   - "medium": Clear dish, but portion must be estimated
-   - "low": Ambiguous ingredients or preparation method
+## EXTRACTION RULES
+1. Read the menu image carefully. Extract ALL visible dish names exactly as written.
+2. For each dish, analyze the description (if provided) to identify:
+   - Primary protein source (meat, fish, legumes, tofu, etc.)
+   - Carbohydrate base (rice, pasta, bread, potatoes, etc.)
+   - Cooking method (grilled, fried, steamed, etc.) - this significantly affects nutrition
+   - Sauces and dressings (often high in sodium, fat, or sugar)
+   - Portion indicators (if any: "large", "200g", "half", etc.)
 
-For each dish, provide:
-- dish: The exact name from the menu
+## NUTRITIONAL ESTIMATION RULES
+1. NEVER guess single numbers. Always use ranges based on typical restaurant portions.
+2. For unknown portions, use these industry standards:
+   - Appetizer: 150-250g
+   - Main course: 300-450g
+   - Pasta dish: 250-350g cooked pasta + sauce
+   - Steak: 170-280g raw weight
+   - Chicken breast: 140-200g
+3. Account for cooking method impact:
+   - Fried: +30-50% fat compared to grilled
+   - Creamy sauce: +150-300 kcal
+   - Butter-based: +100-200 kcal
+4. Reference USDA FoodData Central values for base ingredients.
+
+## CONFIDENCE SCORING
+- "high": Common dish with clear ingredients, standard preparation (e.g., "Grilled Salmon with Rice")
+- "medium": Known dish but preparation varies (e.g., "Chef's Signature Pasta")
+- "low": Ambiguous name, fusion dish, or unclear ingredients (e.g., "House Special")
+
+## OUTPUT FORMAT
+For each dish, return:
+- dish: Exact name from menu
 - confidence: "high" | "medium" | "low"
-- ingredients_detected: Array of likely core ingredients
-- nutrition: Object with ranges for calories_kcal, protein_g, carbs_g, fat_g, sodium_mg OR "unavailable"
-- data_sources: List of databases this would be verified against (USDA FoodData Central, Nutritionix, Edamam)
-- notes: Any caveats about the estimate
-- reason: (only if nutrition is "unavailable") Why data cannot be provided
+- ingredients_detected: Array of core ingredients (be specific: "chicken thigh" not just "chicken")
+- nutrition: Object with ranges { calories_kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg } OR "unavailable"
+- data_sources: ["USDA FoodData Central", "Nutritionix", "Edamam"] as applicable
+- notes: Preparation assumptions, portion estimates, or caveats
+- reason: (only if nutrition is "unavailable") Why data cannot be computed
 
-RESPOND WITH ONLY A VALID JSON ARRAY of dish objects. No markdown, no explanation, just the JSON array.`;
+RESPOND WITH ONLY A VALID JSON ARRAY. No markdown code blocks, no explanation text.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -61,7 +81,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -69,7 +89,15 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: "Analyze this menu image. Extract all dish names and provide nutritional estimates for each. Remember: ranges over false precision, transparency over completeness.",
+                text: `Analyze this menu image thoroughly.
+
+STEP 1: Identify every dish name visible on the menu.
+STEP 2: For each dish, examine any description text to determine ingredients.
+STEP 3: Consider typical restaurant preparation methods and portion sizes.
+STEP 4: Calculate nutritional ranges using USDA reference data.
+STEP 5: Assign confidence based on ingredient clarity.
+
+Remember: Use ranges (e.g., "450-600") not single values. Be specific about ingredients. Note any assumptions about preparation method.`,
               },
               {
                 type: "image_url",
