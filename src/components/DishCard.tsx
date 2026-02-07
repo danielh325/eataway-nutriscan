@@ -80,7 +80,7 @@ export const DishCard = ({ dish, index }: DishCardProps) => {
               Detected Ingredients
             </p>
             <div className="flex flex-wrap gap-2">
-              {dish.ingredients_detected.map((ingredient, i) => (
+              {(dish.ingredients_detected || []).map((ingredient, i) => (
                 <span
                   key={i}
                   className="px-3 py-1.5 bg-secondary text-sm rounded-full border border-border"
@@ -151,7 +151,7 @@ export const DishCard = ({ dish, index }: DishCardProps) => {
 
           {/* Data Sources & Notes */}
           <div className="p-5 bg-secondary/30">
-            {dish.data_sources.length > 0 && (
+            {(dish.data_sources?.length ?? 0) > 0 && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                 <Database className="w-3.5 h-3.5" />
                 <span>Sources: {dish.data_sources.join(", ")}</span>
