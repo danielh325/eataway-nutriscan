@@ -3,70 +3,34 @@ import { MenuUploader } from "@/components/MenuUploader";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { DishData } from "@/components/DishCard";
 import { Utensils, Sparkles, Shield, Database } from "lucide-react";
-
-// Demo data for showcase
-const DEMO_RESULTS: DishData[] = [
-  {
-    dish: "Grilled Chicken Alfredo",
-    confidence: "medium",
-    ingredients_detected: ["grilled chicken breast", "fettuccine pasta", "alfredo sauce", "parmesan"],
-    nutrition: {
-      calories_kcal: "750–920",
-      protein_g: "35–45",
-      carbs_g: "60–75",
-      fat_g: "38–50",
-      sodium_mg: "900–1200",
-    },
-    data_sources: ["USDA FoodData Central", "Nutritionix"],
-    notes: "Portion size not specified; values are estimates within standard serving ranges.",
-  },
-  {
-    dish: "Caesar Salad",
-    confidence: "high",
-    ingredients_detected: ["romaine lettuce", "parmesan cheese", "croutons", "caesar dressing", "anchovy"],
-    nutrition: {
-      calories_kcal: "320–400",
-      protein_g: "8–12",
-      carbs_g: "15–22",
-      fat_g: "24–32",
-      sodium_mg: "650–850",
-    },
-    data_sources: ["USDA FoodData Central"],
-    notes: "Based on typical restaurant portion of 200g.",
-  },
-  {
-    dish: "House Special",
-    confidence: "low",
-    ingredients_detected: ["unknown"],
-    nutrition: "unavailable",
-    data_sources: [],
-    reason: "Insufficient ingredient specificity to compute verified nutrition",
-  },
-  {
-    dish: "Margherita Pizza",
-    confidence: "medium",
-    ingredients_detected: ["pizza dough", "tomato sauce", "mozzarella", "fresh basil", "olive oil"],
-    nutrition: {
-      calories_kcal: "800–1100",
-      protein_g: "28–38",
-      carbs_g: "95–120",
-      fat_g: "30–45",
-      sodium_mg: "1500–2000",
-    },
-    data_sources: ["USDA FoodData Central", "Edamam"],
-    notes: "Based on 12-inch pizza. Values may vary by crust thickness.",
-  },
-];
+import { analyzeMenu } from "@/lib/api/menu";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<DishData[] | null>(null);
+  const { toast } = useToast();
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
-    // Simulate processing delay for demo
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    setResults(DEMO_RESULTS);
+    
+    const response = await analyzeMenu(file);
+    
+    if (response.error) {
+      toast({
+        title: "Analysis Failed",
+        description: response.error,
+        variant: "destructive",
+      });
+      setResults(null);
+    } else if (response.dishes) {
+      setResults(response.dishes);
+      toast({
+        title: "Menu Analyzed",
+        description: `Found ${response.dishes.length} dishes`,
+      });
+    }
+    
     setIsProcessing(false);
   };
 
