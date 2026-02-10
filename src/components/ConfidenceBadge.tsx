@@ -2,9 +2,10 @@ import { cn } from "@/lib/utils";
 
 interface ConfidenceBadgeProps {
   confidence: "high" | "medium" | "low";
+  score?: number;
 }
 
-export const ConfidenceBadge = ({ confidence }: ConfidenceBadgeProps) => {
+export const ConfidenceBadge = ({ confidence, score }: ConfidenceBadgeProps) => {
   const configs = {
     high: {
       label: "HIGH",
@@ -21,6 +22,7 @@ export const ConfidenceBadge = ({ confidence }: ConfidenceBadgeProps) => {
   };
 
   const config = configs[confidence];
+  const displayScore = score !== undefined ? `${(score * 100).toFixed(0)}%` : config.label;
 
   return (
     <span
@@ -29,7 +31,7 @@ export const ConfidenceBadge = ({ confidence }: ConfidenceBadgeProps) => {
         config.className
       )}
     >
-      {config.label}
+      {displayScore}
     </span>
   );
 };
