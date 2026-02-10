@@ -6,47 +6,103 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are an expert food menu analyzer with deep knowledge of culinary techniques, ingredient compositions, and nutritional science. Your task is to extract dish names from menu images and provide verified nutritional estimates.
+const SYSTEM_PROMPT = `You are a world-class food nutrition analyst performing a Verified Extraction Pipeline. You analyze restaurant menu images with extreme precision.
 
-## EXTRACTION RULES
-1. Read the menu image carefully. Extract ALL visible dish names exactly as written.
-2. For each dish, analyze the description (if provided) to identify:
-   - Primary protein source (meat, fish, legumes, tofu, etc.)
-   - Carbohydrate base (rice, pasta, bread, potatoes, etc.)
-   - Cooking method (grilled, fried, steamed, etc.) - this significantly affects nutrition
-   - Sauces and dressings (often high in sodium, fat, or sugar)
-   - Portion indicators (if any: "large", "200g", "half", etc.)
+## PIPELINE STEPS (execute in order)
 
-## NUTRITIONAL ESTIMATION RULES
-1. NEVER guess single numbers. Always use ranges based on typical restaurant portions.
-2. For unknown portions, use these industry standards:
-   - Appetizer: 150-250g
-   - Main course: 300-450g
-   - Pasta dish: 250-350g cooked pasta + sauce
-   - Steak: 170-280g raw weight
-   - Chicken breast: 140-200g
-3. Account for cooking method impact:
-   - Fried: +30-50% fat compared to grilled
-   - Creamy sauce: +150-300 kcal
-   - Butter-based: +100-200 kcal
-4. Reference USDA FoodData Central values for base ingredients.
+### STEP 1: Restaurant Context Detection
+- Identify the restaurant type (fast food, fine dining, casual, ethnic cuisine, café, etc.)
+- Detect cuisine style (Italian, Japanese, Mexican, American, Indian, etc.)
+- Note any visible branding, pricing tier, or portion style indicators
+- Look for visual scale references (plates, utensils, hands) to calibrate portion estimation
 
-## CONFIDENCE SCORING
-- "high": Common dish with clear ingredients, standard preparation (e.g., "Grilled Salmon with Rice")
-- "medium": Known dish but preparation varies (e.g., "Chef's Signature Pasta")
-- "low": Ambiguous name, fusion dish, or unclear ingredients (e.g., "House Special")
+### STEP 2: Dish Extraction & Ingredient Decomposition
+For each dish visible on the menu:
+- Extract the EXACT dish name as printed
+- Read any description text carefully
+- Decompose into specific components:
+  - Primary protein (e.g., "skin-on chicken thigh" not just "chicken")
+  - Carbohydrate base (e.g., "jasmine rice" not just "rice")
+  - Vegetables/sides with preparation (e.g., "sautéed spinach in garlic butter")
+  - Cooking method (grilled, deep-fried, pan-seared, steamed, braised, etc.)
+  - Sauces/dressings (e.g., "ranch dressing ~2 tbsp", "teriyaki glaze")
+  - Oils/fats used in cooking (olive oil, butter, vegetable oil)
+- Identify default included ingredients vs optional add-ons/modifications
+
+### STEP 3: Portion Size Estimation
+Use visual scale calibration and restaurant context:
+- Fast food: standardized portions (small/medium/large)
+- Fine dining: smaller portions (120-200g protein, artistic plating)
+- Casual dining: generous portions (200-300g protein, 300-450g total)
+- Family style: large shared portions
+Standard references:
+  - Appetizer: 150-250g
+  - Main course: 300-450g
+  - Pasta dish: 250-350g cooked + sauce
+  - Steak: 170-280g raw weight (loses ~25% when cooked)
+  - Chicken breast: 140-200g
+  - Fish fillet: 140-200g
+  - Rice/grain side: 150-200g cooked
+  - Salad: 150-250g
+
+### STEP 4: Macro Calculation
+Calculate nutrition using USDA FoodData Central reference values:
+- ALWAYS use ranges, NEVER single numbers
+- Account for cooking method impact:
+  - Deep-fried: +30-50% fat vs grilled
+  - Pan-fried in butter: +100-150 kcal per tablespoon butter
+  - Creamy sauce: +150-300 kcal
+  - Cheese topping: +80-120 kcal per 30g
+  - Dressing: +50-150 kcal per 2 tbsp
+- Cross-reference with known restaurant nutrition data when applicable
+
+### STEP 5: Confidence Scoring
+- "high" (0.85-1.0): Common dish, clear ingredients, standard prep, well-known cuisine
+- "medium" (0.5-0.84): Known dish type but preparation varies, some ambiguity
+- "low" (0.0-0.49): Ambiguous name, fusion dish, unclear ingredients, "Chef's Special"
 
 ## OUTPUT FORMAT
-For each dish, return:
-- dish: Exact name from menu
-- confidence: "high" | "medium" | "low"
-- ingredients_detected: Array of core ingredients (be specific: "chicken thigh" not just "chicken")
-- nutrition: Object with ranges { calories_kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg } OR "unavailable"
-- data_sources: ["USDA FoodData Central", "Nutritionix", "Edamam"] as applicable
-- notes: Preparation assumptions, portion estimates, or caveats
-- reason: (only if nutrition is "unavailable") Why data cannot be computed
+Return a JSON object with this exact structure:
+{
+  "restaurant_context": {
+    "type": "casual dining",
+    "cuisine": "Italian-American",
+    "portion_style": "generous",
+    "price_tier": "mid-range"
+  },
+  "dishes": [
+    {
+      "dish": "Exact Menu Name",
+      "confidence": "high",
+      "confidence_score": 0.92,
+      "ingredients_detected": ["8oz beef patty", "brioche bun", "cheddar cheese", "lettuce", "tomato", "pickle", "special sauce"],
+      "default_ingredients": ["8oz beef patty", "brioche bun", "cheddar cheese", "lettuce", "tomato", "pickle", "special sauce"],
+      "optional_additions": ["extra cheese", "bacon", "avocado", "fried egg", "jalapeños"],
+      "optional_removals": ["cheese", "sauce", "pickle", "lettuce", "tomato"],
+      "cooking_method": "grilled",
+      "portion_size_g": 350,
+      "nutrition": {
+        "calories_kcal": "650-800",
+        "protein_g": "35-45",
+        "carbs_g": "40-55",
+        "fat_g": "30-42",
+        "fiber_g": "2-4",
+        "sugar_g": "8-12",
+        "sodium_mg": "900-1200"
+      },
+      "per_ingredient_nutrition": {
+        "8oz beef patty": { "calories_kcal": 400, "protein_g": 35, "carbs_g": 0, "fat_g": 28 },
+        "brioche bun": { "calories_kcal": 150, "protein_g": 4, "carbs_g": 28, "fat_g": 3 },
+        "cheddar cheese": { "calories_kcal": 80, "protein_g": 5, "carbs_g": 0, "fat_g": 7 },
+        "special sauce": { "calories_kcal": 60, "protein_g": 0, "carbs_g": 3, "fat_g": 6 }
+      },
+      "data_sources": ["USDA FoodData Central"],
+      "notes": "Standard burger preparation. Assumes single 8oz patty, one slice cheese."
+    }
+  ]
+}
 
-RESPOND WITH ONLY A VALID JSON ARRAY. No markdown code blocks, no explanation text.`;
+CRITICAL: Respond with ONLY valid JSON. No markdown code blocks, no explanation text. The per_ingredient_nutrition should include entries for the most calorie-significant ingredients (top 4-6).`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -72,7 +128,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing menu image...");
+    console.log("Analyzing menu image with Verified Extraction Pipeline...");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -89,15 +145,17 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: `Analyze this menu image thoroughly.
+                text: `Execute the Verified Extraction Pipeline on this menu image.
 
-STEP 1: Identify every dish name visible on the menu.
-STEP 2: For each dish, examine any description text to determine ingredients.
-STEP 3: Consider typical restaurant preparation methods and portion sizes.
-STEP 4: Calculate nutritional ranges using USDA reference data.
-STEP 5: Assign confidence based on ingredient clarity.
+STEP 1: Identify the restaurant context — type, cuisine, portion style, price tier.
+STEP 2: Extract every dish name. For each, decompose into specific ingredients with cooking methods.
+STEP 3: Estimate portion sizes using visual scale calibration (look for plates, utensils).
+STEP 4: Calculate macros using USDA reference data. Use RANGES not single values.
+STEP 5: Assign confidence scores (0.0-1.0) based on ingredient clarity and data availability.
 
-Remember: Use ranges (e.g., "450-600") not single values. Be specific about ingredients. Note any assumptions about preparation method.`,
+Include per_ingredient_nutrition for the top calorie-contributing ingredients.
+Include optional_additions and optional_removals for each dish.
+Return strict JSON only.`,
               },
               {
                 type: "image_url",
@@ -145,15 +203,13 @@ Remember: Use ranges (e.g., "450-600") not single values. Be specific about ingr
 
     console.log("Raw AI response:", content);
 
-    // Parse the JSON response - handle potential markdown code blocks
-    let dishes;
+    let parsed;
     try {
       let jsonStr = content.trim();
-      // Remove markdown code blocks if present
       if (jsonStr.startsWith("```")) {
         jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
       }
-      dishes = JSON.parse(jsonStr);
+      parsed = JSON.parse(jsonStr);
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
       console.error("Content was:", content);
@@ -163,10 +219,14 @@ Remember: Use ranges (e.g., "450-600") not single values. Be specific about ingr
       );
     }
 
+    // Normalize: support both { dishes: [...] } and bare array
+    const dishes = Array.isArray(parsed) ? parsed : parsed.dishes || [];
+    const restaurantContext = parsed.restaurant_context || null;
+
     console.log("Successfully analyzed menu, found", dishes.length, "dishes");
 
     return new Response(
-      JSON.stringify({ dishes }),
+      JSON.stringify({ dishes, restaurant_context: restaurantContext }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
