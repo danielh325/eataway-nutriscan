@@ -102,7 +102,7 @@ Return a JSON object with this exact structure:
   ]
 }
 
-CRITICAL: Respond with ONLY valid JSON. No markdown code blocks, no explanation text. The per_ingredient_nutrition should include entries for the most calorie-significant ingredients (top 4-6).`;
+CRITICAL: Respond with ONLY valid JSON. No markdown code blocks, no explanation text. The per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals (using the same exact names), plus the most calorie-significant default ingredients (top 4-6).`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

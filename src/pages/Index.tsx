@@ -158,10 +158,7 @@ const Index = () => {
         {showDailyLog ? (
           <DailyLog />
         ) : isProcessing ? (
-          <div className="space-y-8">
-            <MenuUploader onImageUpload={handleImageUpload} isProcessing={isProcessing} />
-            <AnalysisSkeleton />
-          </div>
+          <AnalysisSkeleton />
         ) : !results ? (
           <div className="space-y-10 md:space-y-12">
             {/* Hero Section */}
