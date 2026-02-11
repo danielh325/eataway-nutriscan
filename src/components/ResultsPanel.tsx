@@ -12,9 +12,11 @@ interface RestaurantContextData {
 interface ResultsPanelProps {
   dishes: DishData[];
   restaurantContext?: RestaurantContextData | null;
+  onSaveDish?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
+  isLoggedIn?: boolean;
 }
 
-export const ResultsPanel = ({ dishes, restaurantContext }: ResultsPanelProps) => {
+export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn }: ResultsPanelProps) => {
   const totalDishes = dishes.length;
   const availableNutrition = dishes.filter((d) => d.nutrition !== "unavailable").length;
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
@@ -57,7 +59,7 @@ export const ResultsPanel = ({ dishes, restaurantContext }: ResultsPanelProps) =
         </h2>
         <div className="space-y-3">
           {dishes.map((dish, index) => (
-            <DishCard key={index} dish={dish} index={index} />
+            <DishCard key={index} dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
           ))}
         </div>
       </div>
@@ -66,7 +68,7 @@ export const ResultsPanel = ({ dishes, restaurantContext }: ResultsPanelProps) =
       <div className="p-3 md:p-4 bg-secondary rounded-xl border border-border">
         <p className="text-xs text-muted-foreground text-center">
           All nutrition values are estimates. Use portion sliders and ingredient toggles to refine.
-          Actual values may vary by restaurant preparation.
+          {!isLoggedIn && " Sign in to save dishes to your daily health log."}
         </p>
       </div>
     </div>

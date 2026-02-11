@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save } from "lucide-react";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
@@ -41,6 +41,8 @@ export interface DishData {
 interface DishCardProps {
   dish: DishData;
   index: number;
+  onSave?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
+  isLoggedIn?: boolean;
 }
 
 const parseRangeMid = (value: string): number => {
@@ -49,7 +51,7 @@ const parseRangeMid = (value: string): number => {
   return parts[0] || 0;
 };
 
-export const DishCard = ({ dish, index }: DishCardProps) => {
+export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
@@ -306,7 +308,16 @@ export const DishCard = ({ dish, index }: DishCardProps) => {
               </div>
             )}
             {dish.notes && (
-              <p className="text-xs text-muted-foreground italic">{dish.notes}</p>
+              <p className="text-xs text-muted-foreground italic mb-2">{dish.notes}</p>
+            )}
+            {onSave && hasNutrition && adjustedNutrition && (
+              <button
+                onClick={() => onSave(dish, adjustedNutrition.calories_kcal, adjustedNutrition.protein_g, adjustedNutrition.carbs_g, adjustedNutrition.fat_g, portionMultiplier)}
+                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isLoggedIn ? "Save to Daily Log" : "Sign in to Save"}
+              </button>
             )}
           </div>
         </div>

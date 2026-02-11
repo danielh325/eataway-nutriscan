@@ -2,10 +2,14 @@ import { useState } from "react";
 import { MenuUploader } from "@/components/MenuUploader";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { AnalysisSkeleton } from "@/components/LoadingSkeleton";
+import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
-import { Sparkles, Shield, Database } from "lucide-react";
+import { Sparkles, Shield, Database, LogIn, LogOut, BookOpen } from "lucide-react";
 import { analyzeMenu } from "@/lib/api/menu";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { lovable } from "@/integrations/lovable/index";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RestaurantContextData {
   type?: string;
@@ -18,10 +22,13 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<DishData[] | null>(null);
   const [restaurantContext, setRestaurantContext] = useState<RestaurantContextData | null>(null);
+  const [showDailyLog, setShowDailyLog] = useState(false);
   const { toast } = useToast();
+  const { user, loading: authLoading, signOut } = useAuth();
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
+    setShowDailyLog(false);
     
     const response = await analyzeMenu(file);
     
@@ -48,13 +55,50 @@ const Index = () => {
   const handleReset = () => {
     setResults(null);
     setRestaurantContext(null);
+    setShowDailyLog(false);
+  };
+
+  const handleSignIn = async () => {
+    const { error } = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
+    if (error) {
+      toast({ title: "Sign-in failed", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleSaveDish = async (dish: DishData, adjustedCalories: number, adjustedProtein: number, adjustedCarbs: number, adjustedFat: number, portionMultiplier: number) => {
+    if (!user) {
+      toast({ title: "Sign in to save", description: "Log in with Google to track your meals.", variant: "destructive" });
+      return;
+    }
+
+    const { error } = await supabase.from("meal_logs").insert({
+      user_id: user.id,
+      dish_name: dish.dish,
+      calories_kcal: adjustedCalories,
+      protein_g: adjustedProtein,
+      carbs_g: adjustedCarbs,
+      fat_g: adjustedFat,
+      confidence: dish.confidence,
+      confidence_score: dish.confidence_score || null,
+      portion_multiplier: portionMultiplier,
+      ingredients: dish.ingredients_detected || [],
+      notes: dish.notes || null,
+    });
+
+    if (error) {
+      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Dish Logged", description: `${dish.dish} added to today's log` });
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b-2 border-foreground">
-        <div className="container max-w-4xl px-4 py-5 md:py-6">
+        <div className="container max-w-4xl px-4 py-4 md:py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 md:w-10 md:h-10 bg-foreground text-primary-foreground rounded-xl flex items-center justify-center">
@@ -67,21 +111,53 @@ const Index = () => {
               </div>
               <h1 className="text-lg md:text-xl font-bold tracking-tight">NutriScan</h1>
             </div>
-            {(results || isProcessing) && (
-              <button
-                onClick={handleReset}
-                disabled={isProcessing}
-                className="px-3 md:px-4 py-2 text-sm font-medium border-2 border-foreground rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
-              >
-                New Scan
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {user && (
+                <button
+                  onClick={() => { setShowDailyLog(!showDailyLog); setResults(null); }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Daily Log</span>
+                </button>
+              )}
+              {(results || isProcessing) && (
+                <button
+                  onClick={handleReset}
+                  disabled={isProcessing}
+                  className="px-3 py-2 text-xs md:text-sm font-medium border-2 border-foreground rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
+                >
+                  New Scan
+                </button>
+              )}
+              {!authLoading && (
+                user ? (
+                  <button
+                    onClick={signOut}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Sign Out</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSignIn}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium bg-foreground text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Sign In</span>
+                  </button>
+                )
+              )}
+            </div>
           </div>
         </div>
       </header>
 
       <main className="container max-w-4xl px-4 py-8 md:py-12">
-        {isProcessing ? (
+        {showDailyLog ? (
+          <DailyLog />
+        ) : isProcessing ? (
           <div className="space-y-8">
             <MenuUploader onImageUpload={handleImageUpload} isProcessing={isProcessing} />
             <AnalysisSkeleton />
@@ -127,16 +203,16 @@ const Index = () => {
               <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-xl border border-border hover:border-foreground transition-colors">
                 <Shield className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="font-medium mb-1 text-sm md:text-base">Confidence Scores</h3>
+                  <h3 className="font-medium mb-1 text-sm md:text-base">Daily Health Log</h3>
                   <p className="text-xs md:text-sm text-muted-foreground">
-                    Numeric confidence with low-score items flagged for manual review
+                    Track scans against personalized calorie, protein, carbs, and fat goals
                   </p>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          <ResultsPanel dishes={results} restaurantContext={restaurantContext} />
+          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} />
         )}
       </main>
 
