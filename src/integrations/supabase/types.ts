@@ -14,7 +14,117 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      daily_goals: {
+        Row: {
+          calories_kcal: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          protein_g: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories_kcal?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          protein_g?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          calories_kcal?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          protein_g?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meal_logs: {
+        Row: {
+          calories_kcal: number
+          carbs_g: number
+          confidence: string
+          confidence_score: number | null
+          created_at: string
+          dish_name: string
+          fat_g: number
+          id: string
+          ingredients: Json | null
+          logged_at: string
+          notes: string | null
+          portion_multiplier: number
+          protein_g: number
+          user_id: string
+        }
+        Insert: {
+          calories_kcal?: number
+          carbs_g?: number
+          confidence?: string
+          confidence_score?: number | null
+          created_at?: string
+          dish_name: string
+          fat_g?: number
+          id?: string
+          ingredients?: Json | null
+          logged_at?: string
+          notes?: string | null
+          portion_multiplier?: number
+          protein_g?: number
+          user_id: string
+        }
+        Update: {
+          calories_kcal?: number
+          carbs_g?: number
+          confidence?: string
+          confidence_score?: number | null
+          created_at?: string
+          dish_name?: string
+          fat_g?: number
+          id?: string
+          ingredients?: Json | null
+          logged_at?: string
+          notes?: string | null
+          portion_multiplier?: number
+          protein_g?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
