@@ -48,7 +48,25 @@ interface DishCardProps {
 const parseRangeMid = (value: string): number => {
   const parts = value.split("–").map((v) => parseFloat(v.trim()));
   if (parts.length === 2) return (parts[0] + parts[1]) / 2;
-  return parts[0] || 0;
+  const dashParts = value.split("-").map((v) => parseFloat(v.trim()));
+  if (dashParts.length === 2 && !isNaN(dashParts[0]) && !isNaN(dashParts[1])) return (dashParts[0] + dashParts[1]) / 2;
+  return parseFloat(value) || 0;
+};
+
+const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngredientNutrition>): PerIngredientNutrition | null => {
+  const lower = name.toLowerCase();
+  // Exact match first
+  if (perIngr[name]) return perIngr[name];
+  // Case-insensitive match
+  for (const key of Object.keys(perIngr)) {
+    if (key.toLowerCase() === lower) return perIngr[key];
+  }
+  // Partial match (e.g., "cheese" matches "cheddar cheese", "extra cheese" matches "cheese")
+  for (const key of Object.keys(perIngr)) {
+    const keyLower = key.toLowerCase();
+    if (keyLower.includes(lower) || lower.includes(keyLower)) return perIngr[key];
+  }
+  return null;
 };
 
 export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => {
@@ -73,7 +91,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
     // Subtract removed ingredients
     const perIngr = dish.per_ingredient_nutrition || {};
     for (const name of removedIngredients) {
-      const n = perIngr[name];
+      const n = findIngredientNutrition(name, perIngr);
       if (n) {
         base.calories_kcal -= n.calories_kcal;
         base.protein_g -= n.protein_g;
@@ -82,9 +100,9 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
       }
     }
 
-    // Add added ingredients (estimate ~100 kcal each if no data)
+    // Add added ingredients
     for (const name of addedIngredients) {
-      const n = perIngr[name];
+      const n = findIngredientNutrition(name, perIngr);
       if (n) {
         base.calories_kcal += n.calories_kcal;
         base.protein_g += n.protein_g;
