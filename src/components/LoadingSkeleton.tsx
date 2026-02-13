@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
+import { Loader2, Check } from "lucide-react";
 
 export const AnalysisSkeleton = () => {
   const steps = [
-    { label: "Detecting restaurant context", icon: "🏪" },
-    { label: "Decomposing ingredients", icon: "🧪" },
-    { label: "Estimating portions", icon: "⚖️" },
-    { label: "Calculating macros", icon: "📊" },
+    "Detecting restaurant context",
+    "Extracting dish names & recipes",
+    "Decomposing ingredients",
+    "Cross-referencing nutrition databases",
+    "Estimating portions",
+    "Calculating macros",
+    "Verifying accuracy",
   ];
 
   const [activeStep, setActiveStep] = useState(0);
@@ -13,52 +17,41 @@ export const AnalysisSkeleton = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
-    }, 2200);
+    }, 1800);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center py-20 md:py-28 animate-fade-in">
-      {/* Animated ring */}
-      <div className="relative w-16 h-16 mb-10">
-        <div className="absolute inset-0 rounded-full border-2 border-border" />
-        <div className="absolute inset-0 rounded-full border-2 border-foreground border-t-transparent animate-spin" />
-        <span className="absolute inset-0 flex items-center justify-center text-xl">
-          {steps[activeStep].icon}
-        </span>
-      </div>
+    <div className="flex flex-col items-center justify-center py-24 md:py-32 animate-fade-in">
+      <Loader2 className="w-8 h-8 text-foreground animate-spin mb-8" />
 
-      {/* Steps */}
-      <div className="space-y-2.5 w-full max-w-xs">
+      <div className="space-y-1.5 w-full max-w-xs">
         {steps.map((step, i) => (
           <div
             key={i}
-            className={`flex items-center gap-3 transition-all duration-500 ${
+            className={`flex items-center gap-2.5 transition-all duration-500 ${
               i < activeStep
-                ? "opacity-40"
+                ? "opacity-30"
                 : i === activeStep
                 ? "opacity-100"
-                : "opacity-20"
+                : "opacity-0 h-0 overflow-hidden"
             }`}
           >
-            <div
-              className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500 ${
-                i <= activeStep ? "bg-foreground" : "bg-border"
-              }`}
-            />
+            {i < activeStep ? (
+              <Check className="w-3 h-3 text-muted-foreground shrink-0" />
+            ) : (
+              <div className="w-1.5 h-1.5 rounded-full bg-foreground shrink-0" />
+            )}
             <span className="text-sm font-mono text-muted-foreground">
-              {step.label}
-              {i === activeStep && (
-                <span className="animate-pulse">…</span>
-              )}
-              {i < activeStep && " ✓"}
+              {step}
+              {i === activeStep && <span className="animate-pulse">…</span>}
             </span>
           </div>
         ))}
       </div>
 
       <p className="mt-10 text-[10px] text-muted-foreground font-mono uppercase tracking-widest">
-        Analyzing your menu
+        Analyzing with maximum accuracy
       </p>
     </div>
   );

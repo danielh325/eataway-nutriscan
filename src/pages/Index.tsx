@@ -154,7 +154,7 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="container max-w-4xl px-4 py-8 md:py-12">
+      <main className={`container px-4 py-8 md:py-12 ${results ? 'max-w-6xl' : 'max-w-4xl'}`}>
         {showDailyLog ? (
           <DailyLog />
         ) : isProcessing ? (

@@ -1,6 +1,6 @@
 import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
-import { FileText, Utensils, BarChart3 } from "lucide-react";
+import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
 
 interface RestaurantContextData {
   type?: string;
@@ -22,52 +22,39 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
 
   return (
-    <div className="space-y-6 md:space-y-8 animate-fade-in">
-      {/* Restaurant Context */}
-      {restaurantContext && (
-        <div className="space-y-2">
-          <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-            Restaurant Context
-          </p>
+    <div className="animate-fade-in">
+      {/* Top summary bar */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-6 pb-4 border-b border-border">
+        {restaurantContext && (
           <RestaurantContext context={restaurantContext} />
-        </div>
-      )}
-
-      {/* Stats Header */}
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <div className="p-3 md:p-4 border-2 border-foreground rounded-xl text-center">
-          <Utensils className="w-5 h-5 mx-auto mb-2" />
-          <p className="text-2xl font-bold font-mono">{totalDishes}</p>
-          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Dishes</p>
-        </div>
-        <div className="p-3 md:p-4 border-2 border-foreground rounded-xl text-center">
-          <BarChart3 className="w-5 h-5 mx-auto mb-2" />
-          <p className="text-2xl font-bold font-mono">{availableNutrition}</p>
-          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">With Data</p>
-        </div>
-        <div className="p-3 md:p-4 border-2 border-foreground rounded-xl text-center">
-          <FileText className="w-5 h-5 mx-auto mb-2" />
-          <p className="text-2xl font-bold font-mono">{highConfidence}</p>
-          <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">High Conf.</p>
+        )}
+        <div className="flex items-center gap-6 ml-auto text-sm font-mono text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Utensils className="w-3.5 h-3.5" />
+            {totalDishes} dishes
+          </span>
+          <span className="flex items-center gap-1.5">
+            <BarChart3 className="w-3.5 h-3.5" />
+            {availableNutrition} analyzed
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            {highConfidence} high conf.
+          </span>
         </div>
       </div>
 
-      {/* Dishes List */}
-      <div className="space-y-3 md:space-y-4">
-        <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-          Analyzed Dishes
-        </h2>
-        <div className="space-y-3">
-          {dishes.map((dish, index) => (
-            <DishCard key={index} dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
-          ))}
-        </div>
+      {/* Dishes grid — 2 columns on wide screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {dishes.map((dish, index) => (
+          <DishCard key={index} dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
+        ))}
       </div>
 
       {/* Footer Note */}
-      <div className="p-3 md:p-4 bg-secondary rounded-xl border border-border">
+      <div className="mt-6 p-3 bg-secondary/50 rounded-xl border border-border">
         <p className="text-xs text-muted-foreground text-center">
-          All nutrition values are estimates. Use portion sliders and ingredient toggles to refine.
+          Multi-method verified estimates. Use portion sliders and ingredient toggles to refine.
           {!isLoggedIn && " Sign in to save dishes to your daily health log."}
         </p>
       </div>
