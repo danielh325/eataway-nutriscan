@@ -148,6 +148,36 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
     };
   }, [dishKey]);
 
+  const handleExportJSON = () => {
+    const exportData = dishes.map((dish, index) => ({
+      dish_name: dish.dish,
+      confidence: dish.confidence,
+      confidence_score: dish.confidence_score ?? null,
+      nutrition: dish.nutrition,
+      ingredients_detected: dish.ingredients_detected || [],
+      default_ingredients: dish.default_ingredients || [],
+      optional_additions: dish.optional_additions || [],
+      optional_removals: dish.optional_removals || [],
+      cooking_method: dish.cooking_method || null,
+      portion_size_g: dish.portion_size_g || null,
+      recipe: dish.recipe || null,
+      per_ingredient_nutrition: dish.per_ingredient_nutrition || null,
+      allergens: dish.allergens || [],
+      data_sources: dish.data_sources || [],
+      notes: dish.notes || null,
+      verification_notes: dish.verification_notes || null,
+      image_url: generatedImages[index] || dish.dish_image_url || null,
+    }));
+
+    const blob = new Blob([JSON.stringify({ restaurant_context: restaurantContext || null, dishes: exportData }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "menu-export.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="animate-fade-in">
       {/* Summary header — sticky on scroll */}
@@ -171,6 +201,11 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               <ShieldCheck className="w-3.5 h-3.5" />
               {highConfidence} high conf.
             </span>
+            <Button variant="outline" size="sm" onClick={handleExportJSON} className="ml-auto gap-1.5 rounded-xl">
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Export for Ordering App</span>
+              <span className="md:hidden">Export</span>
+            </Button>
           </div>
         </div>
         {isRefining && (
