@@ -75,69 +75,41 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
       if (cancelled || abortRef.current) return;
 
-      // Step 2: Generate AI images for dishes that don't have real photos
+      // Step 2: Only generate AI images for dishes without any image (limit to first 3 to save time)
       const dishesNeedingImages = dishes
         .map((d, i) => ({ dish: d, index: i }))
         .filter(({ dish, index }) =>
           !matchedIndices.has(index) &&
           !dish.dish_image_url
-        );
+        )
+        .slice(0, 3); // Cap at 3 to avoid long waits and rate limits
 
       if (dishesNeedingImages.length === 0) return;
 
-      const generateOne = async ({ dish, index }: { dish: DishData; index: number }) => {
-        if (cancelled || abortRef.current) return;
+      console.log(`Generating AI images for ${dishesNeedingImages.length} dishes (${dishes.length - matchedIndices.size - dishesNeedingImages.length} skipped)`);
+
+      for (const { dish, index } of dishesNeedingImages) {
+        if (cancelled || abortRef.current) break;
         setActiveGenerations(prev => new Set(prev).add(index));
 
-        let retries = 0;
-        const maxRetries = 6;
-        let success = false;
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-dish-image", {
+            body: {
+              dish_name: dish.dish,
+              cooking_method: dish.cooking_method,
+              ingredients: dish.ingredients_detected?.slice(0, 5),
+            },
+          });
 
-        while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
-          try {
-            const { data, error } = await supabase.functions.invoke("generate-dish-image", {
-              body: {
-                dish_name: dish.dish,
-                cooking_method: dish.cooking_method,
-                ingredients: dish.ingredients_detected?.slice(0, 5),
-              },
-            });
-
-            // Check for rate limit in data response or error
-            const isRateLimited =
-              data?.error === "Rate limit exceeded" ||
-              error?.message?.includes("429") ||
-              error?.status === 429;
-
-            if (isRateLimited) {
-              retries++;
-              const delay = 3000 * Math.pow(2, retries - 1);
-              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-
-            if (!cancelled && !abortRef.current && data?.image_url) {
-              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
-              success = true;
-            }
-
-            if (!success && (error || data?.error)) {
-              console.warn("Image generation skipped for", dish.dish);
-            }
-            break;
-          } catch (err: any) {
-            const msg = JSON.stringify(err) + (err?.message || "") + (err?.context?.body || "");
-            if (msg.includes("429") || msg.includes("Rate limit") || msg.includes("rate limit")) {
-              retries++;
-              const delay = 3000 * Math.pow(2, retries - 1);
-              console.warn(`Rate limited (catch) for ${dish.dish}, retry ${retries}/${maxRetries}`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-            console.warn("Image generation error for", dish.dish);
-            break;
+          if (!cancelled && !abortRef.current && data?.image_url) {
+            setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+          } else if (data?.error === "Rate limit exceeded" || error) {
+            console.warn("Image generation skipped for", dish.dish, "- rate limited or error");
+            // Stop generating more if rate limited
+            if (data?.error === "Rate limit exceeded") break;
           }
+        } catch (err) {
+          console.warn("Image generation error for", dish.dish);
         }
 
         setActiveGenerations(prev => {
@@ -145,14 +117,10 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
           next.delete(index);
           return next;
         });
-      };
 
-      // Process one at a time to avoid rate limits, with minimal delay
-      for (const item of dishesNeedingImages) {
-        if (cancelled || abortRef.current) break;
-        await generateOne(item);
+        // Delay between generations
         if (!cancelled && !abortRef.current) {
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1500));
         }
       }
     };
