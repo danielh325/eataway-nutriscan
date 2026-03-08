@@ -189,6 +189,25 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
         </div>
       )}
 
+      {/* Dish Image */}
+      {generatedImage && (
+        <div className="w-full h-40 md:h-48 overflow-hidden">
+          <img
+            src={generatedImage}
+            alt={dish.dish}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      {imageLoading && (
+        <div className="w-full h-40 md:h-48 bg-secondary flex items-center justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-xs font-mono">Generating image…</span>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
