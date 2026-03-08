@@ -99,10 +99,16 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               },
             });
 
-            if (data?.error === "Rate limit exceeded") {
+            // Check for rate limit in data response or error
+            const isRateLimited =
+              data?.error === "Rate limit exceeded" ||
+              error?.message?.includes("429") ||
+              error?.status === 429;
+
+            if (isRateLimited) {
               retries++;
               const delay = 3000 * Math.pow(2, retries - 1);
-              console.warn(`Rate limited for ${dish.dish}, retry ${retries} in ${delay}ms`);
+              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
@@ -112,19 +118,20 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               success = true;
             }
 
-            if (error || data?.error) {
-              console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+            if (!success && (error || data?.error)) {
+              console.warn("Image generation skipped for", dish.dish);
             }
             break;
           } catch (err: any) {
-            const msg = err?.message || err?.context?.body || "";
-            if (typeof msg === "string" && msg.includes("Rate limit")) {
+            const msg = JSON.stringify(err) + (err?.message || "") + (err?.context?.body || "");
+            if (msg.includes("429") || msg.includes("Rate limit") || msg.includes("rate limit")) {
               retries++;
               const delay = 3000 * Math.pow(2, retries - 1);
+              console.warn(`Rate limited (catch) for ${dish.dish}, retry ${retries}/${maxRetries}`);
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
-            console.warn("Image generation error for", dish.dish, err);
+            console.warn("Image generation error for", dish.dish);
             break;
           }
         }
