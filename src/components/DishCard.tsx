@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck } from "lucide-react";
-import { useState, useMemo } from "react";
+import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { PortionSlider } from "./PortionSlider";
 import { IngredientToggles } from "./IngredientToggles";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PerIngredientNutrition {
   calories_kcal: number;
@@ -30,6 +31,8 @@ export interface DishData {
   portion_size_g?: number;
   recipe?: DishRecipe;
   verification_notes?: string;
+  has_image_in_menu?: boolean;
+  dish_image_url?: string;
   nutrition: {
     calories_kcal: string;
     protein_g: string;
