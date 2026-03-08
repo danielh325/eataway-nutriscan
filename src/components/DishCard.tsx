@@ -175,11 +175,19 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
           />
         </div>
       )}
-      {imageLoading && (
+      {imageLoading && !generatedImage && (
         <div className="w-full h-40 md:h-48 bg-secondary flex items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-xs font-mono">Generating image…</span>
+          </div>
+        </div>
+      )}
+      {imageQueued && !generatedImage && !imageLoading && (
+        <div className="w-full h-32 bg-secondary/50 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <ImageIcon className="w-4 h-4" />
+            <span className="text-xs font-mono">In queue…</span>
           </div>
         </div>
       )}
