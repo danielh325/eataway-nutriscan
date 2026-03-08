@@ -44,29 +44,48 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
         setImageLoadingIndex(index);
 
-        try {
-          const { data, error } = await supabase.functions.invoke("generate-dish-image", {
-            body: {
-              dish_name: dish.dish,
-              cooking_method: dish.cooking_method,
-              ingredients: dish.ingredients_detected?.slice(0, 5),
-            },
-          });
+        let retries = 0;
+        const maxRetries = 3;
+        let success = false;
 
-          if (!cancelled && !abortRef.current && data?.image_url) {
-            setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
-          }
+        while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
+          try {
+            const { data, error } = await supabase.functions.invoke("generate-dish-image", {
+              body: {
+                dish_name: dish.dish,
+                cooking_method: dish.cooking_method,
+                ingredients: dish.ingredients_detected?.slice(0, 5),
+              },
+            });
 
-          if (error || data?.error) {
-            console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+            if (data?.error === "Rate limit exceeded") {
+              retries++;
+              const delay = 3000 * Math.pow(2, retries - 1); // 3s, 6s, 12s
+              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+
+            if (!cancelled && !abortRef.current && data?.image_url) {
+              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+              success = true;
+            }
+
+            if (error || data?.error) {
+              console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+              break;
+            }
+            
+            success = true;
+          } catch (err) {
+            console.warn("Image generation error for", dish.dish, err);
+            break;
           }
-        } catch (err) {
-          console.warn("Image generation error for", dish.dish, err);
         }
 
-        // Small delay between requests to avoid rate limits
+        // Delay between requests to avoid rate limits
         if (!cancelled && !abortRef.current) {
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
       setImageLoadingIndex(null);
@@ -118,6 +137,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               isLoggedIn={isLoggedIn}
               externalImage={generatedImages[index]}
               imageLoading={imageLoadingIndex === index}
+              imageQueued={!dish.has_image_in_menu && !dish.dish_image_url && !generatedImages[index] && imageLoadingIndex !== index && imageLoadingIndex !== null}
             />
           </div>
         ))}
