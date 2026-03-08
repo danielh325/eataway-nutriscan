@@ -3,6 +3,7 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { extractMenuImages } from "@/lib/api/menu";
 
 interface RestaurantContextData {
   type?: string;
