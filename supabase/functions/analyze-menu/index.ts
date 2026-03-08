@@ -142,7 +142,17 @@ serve(async (req) => {
   }
 
   try {
-    const { imageBase64, mimeType } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      console.error("Failed to parse request body:", parseErr);
+      return new Response(
+        JSON.stringify({ error: "Invalid request body. The image may be too large." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { imageBase64, mimeType } = body;
 
     if (!imageBase64) {
       return new Response(
