@@ -6,6 +6,38 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ─── Few-shot calibration examples ────────────────────────────────────────────
+const FEW_SHOT_EXAMPLES = `
+## CALIBRATION EXAMPLES (use as anchors for portion & nutrition estimation)
+
+### Example 1: Classic Cheeseburger (Casual Dining)
+- Portion: 280g total (150g beef patty, 60g bun, cheese, lettuce, tomato, sauce)
+- Nutrition: calories "650-780", protein "38-45", carbs "38-48", fat "35-45", sodium "900-1200"
+- Cooking: Griddled, oil absorption ~5g, cheese melt adds ~110kcal
+- Key: Don't forget the mayo/sauce (often 80-120kcal alone)
+
+### Example 2: Caesar Salad (Full portion, casual dining)
+- Portion: 350g (200g romaine, 30g parmesan, 40g croutons, 80ml dressing)
+- Nutrition: calories "450-580", protein "12-18", carbs "18-25", fat "35-48", sodium "800-1100"
+- Key: Dressing is 60-70% of total fat. With grilled chicken add: calories +200, protein +30
+
+### Example 3: Margherita Pizza (10-12 inch, restaurant)
+- Portion: 550-700g total
+- Nutrition: calories "750-950", protein "28-38", carbs "85-105", fat "28-42", sodium "1400-1800"
+- Key: Olive oil drizzle adds 120kcal. Thicker crust = +150-200kcal
+
+### Example 4: Pad Thai (Street food / casual)
+- Portion: 400g (200g noodles, 100g protein, veg, sauce)
+- Nutrition: calories "550-720", protein "22-32", carbs "65-85", fat "18-30", sodium "1100-1500"
+- Key: Tamarind sauce has significant sugar (15-25g). Peanuts add 80-100kcal per 15g serving
+
+### Example 5: Grilled Salmon Fillet (Fine dining)
+- Portion: 180-220g salmon + sides
+- Nutrition (salmon only): calories "350-450", protein "38-48", carbs "0-2", fat "18-26", sodium "300-500"
+- Key: Butter/oil finish adds 100-150kcal. Skin-on adds ~50kcal
+`;
+
+// ─── System prompt (shared across models) ─────────────────────────────────────
 const SYSTEM_PROMPT = `You are a world-class food nutrition analyst. Your analysis directly impacts human health decisions — accuracy is paramount.
 
 ## MULTI-METHOD VERIFICATION ARCHITECTURE
@@ -57,6 +89,8 @@ Apply ALL methods in parallel and cross-reference:
 - Detect fusion elements that modify standard preparations
 - Use dish name etymology to infer preparation method when ambiguous
 
+${FEW_SHOT_EXAMPLES}
+
 ## CRITICAL RULES
 1. Extract EVERY SINGLE dish from the menu — scan ALL sections, categories, pages. Do not skip any item.
 2. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
@@ -65,9 +99,10 @@ Apply ALL methods in parallel and cross-reference:
 5. Include recipe reconstruction for every dish
 6. Nutrition ranges must be strings like "650-800", never numbers
 7. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish
-8. Detect ALL allergens for each dish — cross-reference EVERY ingredient against all 14 major allergens plus common sensitivities`;
+8. Detect ALL allergens for each dish — cross-reference EVERY ingredient against all 14 major allergens plus common sensitivities
+9. Use the calibration examples above to anchor your portion and calorie estimates — if your numbers deviate significantly from similar examples, re-examine your assumptions`;
 
-// Tool calling schema for structured output
+// ─── Tool schema (shared) ──────────────────────────────────────────────────
 const EXTRACT_MENU_TOOL = {
   type: "function",
   function: {
@@ -140,13 +175,12 @@ const EXTRACT_MENU_TOOL = {
                 items: {
                   type: "object",
                   properties: {
-                    name: { type: "string", description: "Allergen name e.g. Gluten, Dairy, Nuts, Shellfish, Eggs, Soy, Fish, Sesame, Peanuts, Tree Nuts, Wheat, Celery, Mustard, Lupin, Molluscs, Sulfites" },
-                    severity: { type: "string", enum: ["definite", "likely", "possible", "trace"], description: "How certain the allergen is present" },
-                    source_ingredient: { type: "string", description: "Which ingredient contains this allergen" },
+                    name: { type: "string" },
+                    severity: { type: "string", enum: ["definite", "likely", "possible", "trace"] },
+                    source_ingredient: { type: "string" },
                   },
                   required: ["name", "severity", "source_ingredient"],
                 },
-                description: "All allergens detected in the dish based on ingredients, cooking method, and cross-contamination risk. Cover all 14 major allergens (EU/FDA) plus common sensitivities.",
               },
               has_image_in_menu: { type: "boolean", description: "Whether the menu image contains a photo of this specific dish" },
               data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
@@ -162,6 +196,166 @@ const EXTRACT_MENU_TOOL = {
   },
 };
 
+// ─── Verification tool schema ──────────────────────────────────────────────
+const VERIFY_TOOL = {
+  type: "function",
+  function: {
+    name: "verify_nutrition",
+    description: "Verify and correct nutrition estimates from a previous analysis pass. Return corrected dishes.",
+    parameters: {
+      type: "object",
+      properties: {
+        corrections: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              dish: { type: "string", description: "Dish name" },
+              original_calories: { type: "string", description: "Original calorie range" },
+              corrected_calories: { type: "string", description: "Corrected calorie range" },
+              corrected_protein: { type: "string", description: "Corrected protein range" },
+              corrected_carbs: { type: "string", description: "Corrected carbs range" },
+              corrected_fat: { type: "string", description: "Corrected fat range" },
+              corrected_sodium: { type: "string", description: "Corrected sodium range" },
+              corrected_confidence: { type: "string", enum: ["high", "medium", "low"] },
+              corrected_confidence_score: { type: "number" },
+              correction_reason: { type: "string", description: "Why correction was needed" },
+              is_correct: { type: "boolean", description: "Whether original was already correct" },
+            },
+            required: ["dish", "original_calories", "corrected_calories", "corrected_protein", "corrected_carbs", "corrected_fat", "corrected_sodium", "corrected_confidence", "corrected_confidence_score", "correction_reason", "is_correct"],
+          },
+        },
+      },
+      required: ["corrections"],
+      additionalProperties: false,
+    },
+  },
+};
+
+// ─── User message (shared) ─────────────────────────────────────────────────
+const USER_TEXT = `Analyze this menu image using ALL 7 methods (VID, RR, DCR, CC, SCOD, CLAM, CF). This is health-critical.
+
+CRITICAL: Extract EVERY SINGLE dish/item from the menu. Scan ALL sections, categories, and pages visible. Do NOT skip any item.
+
+STEP 1: Identify restaurant context.
+STEP 2: Extract EVERY dish. Reconstruct FULL RECIPE with specific quantities.
+STEP 3: Calculate nutrition using ALL methods. Cross-reference USDA data. Use RANGES.
+STEP 4: Apply cooking loss & absorption modeling.
+STEP 5: Use culinary fingerprinting for dish identification.
+STEP 6: Run sanity checks — verify macro-to-calorie ratios.
+STEP 7: Assign confidence scores (0.0-1.0).
+STEP 8: For each dish, determine if the menu image contains a photograph of that dish (set has_image_in_menu accordingly).
+STEP 9: Detect ALL allergens for each dish. Check every ingredient against all 14 major allergens. Mark severity as definite/likely/possible/trace.
+STEP 10: Cross-check your estimates against the calibration examples. If a simple cheeseburger exceeds 900kcal or a plain salad without dressing exceeds 200kcal, re-examine.
+
+Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
+Call extract_menu_analysis with the complete results.`;
+
+// ─── Helper: call AI gateway ──────────────────────────────────────────────
+async function callAI(
+  apiKey: string,
+  model: string,
+  messages: any[],
+  tools?: any[],
+  toolChoice?: any
+): Promise<any> {
+  const body: any = { model, messages };
+  if (tools) body.tools = tools;
+  if (toolChoice) body.tool_choice = toolChoice;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const status = response.status;
+    const text = await response.text();
+    throw { status, message: text };
+  }
+
+  return response.json();
+}
+
+// ─── Helper: extract parsed result from AI response ───────────────────────
+function extractParsed(data: any): any {
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) {
+    try { return JSON.parse(toolCall.function.arguments); } catch {}
+  }
+  const content = data.choices?.[0]?.message?.content;
+  if (content) {
+    try {
+      let s = content.trim();
+      if (s.startsWith("```")) s = s.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+      return JSON.parse(s);
+    } catch {}
+  }
+  return null;
+}
+
+// ─── Helper: parse mid value from range string ────────────────────────────
+function parseMid(value: string | number): number {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  const parts = value.split(/[-–]/).map((v) => parseFloat(v.trim()));
+  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return (parts[0] + parts[1]) / 2;
+  return parseFloat(value) || 0;
+}
+
+// ─── Helper: reconcile two model outputs (ensemble averaging) ─────────────
+function reconcileDishes(primary: any[], secondary: any[]): any[] {
+  if (!secondary || secondary.length === 0) return primary;
+
+  // Build a lookup from secondary by lowercased dish name
+  const secondaryMap = new Map<string, any>();
+  for (const d of secondary) {
+    secondaryMap.set(d.dish?.toLowerCase(), d);
+  }
+
+  return primary.map((dish) => {
+    const match = secondaryMap.get(dish.dish?.toLowerCase());
+    if (!match || !match.nutrition || match.nutrition === "unavailable") return dish;
+    if (!dish.nutrition || dish.nutrition === "unavailable") return dish;
+
+    // Average the nutrition ranges
+    const avgRange = (a: string, b: string): string => {
+      const midA = parseMid(a);
+      const midB = parseMid(b);
+      if (midA === 0) return b;
+      if (midB === 0) return a;
+      const avg = (midA + midB) / 2;
+      const spread = Math.round(avg * 0.1);
+      return `${Math.round(avg - spread)}-${Math.round(avg + spread)}`;
+    };
+
+    dish.nutrition = {
+      calories_kcal: avgRange(dish.nutrition.calories_kcal, match.nutrition.calories_kcal),
+      protein_g: avgRange(dish.nutrition.protein_g, match.nutrition.protein_g),
+      carbs_g: avgRange(dish.nutrition.carbs_g, match.nutrition.carbs_g),
+      fat_g: avgRange(dish.nutrition.fat_g, match.nutrition.fat_g),
+      fiber_g: dish.nutrition.fiber_g || match.nutrition.fiber_g,
+      sugar_g: dish.nutrition.sugar_g || match.nutrition.sugar_g,
+      sodium_mg: avgRange(dish.nutrition.sodium_mg, match.nutrition.sodium_mg),
+    };
+
+    // Average confidence scores
+    if (dish.confidence_score !== undefined && match.confidence_score !== undefined) {
+      dish.confidence_score = (dish.confidence_score + match.confidence_score) / 2;
+    }
+
+    // Mark as ensemble-verified
+    dish.data_sources = [...new Set([...(dish.data_sources || []), ...(match.data_sources || []), "Ensemble (Gemini+GPT)"])];
+
+    return dish;
+  });
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -179,126 +373,140 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Analyzing menu with 7-Method Verified Extraction Pipeline + Tool Calling...");
+    console.log("Starting ensemble analysis: Gemini Pro + GPT-5 in parallel...");
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analyze this menu image using ALL 7 methods (VID, RR, DCR, CC, SCOD, CLAM, CF). This is health-critical.
+    const imageContent = [
+      { type: "text", text: USER_TEXT },
+      { type: "image_url", image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` } },
+    ];
 
-CRITICAL: Extract EVERY SINGLE dish/item from the menu. Scan ALL sections, categories, and pages visible. Do NOT skip any item.
+    const messagesPayload = [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: imageContent },
+    ];
 
-STEP 1: Identify restaurant context.
-STEP 2: Extract EVERY dish. Reconstruct FULL RECIPE with specific quantities.
-STEP 3: Calculate nutrition using ALL methods. Cross-reference USDA data. Use RANGES.
-STEP 4: Apply cooking loss & absorption modeling.
-STEP 5: Use culinary fingerprinting for dish identification.
-STEP 6: Run sanity checks — verify macro-to-calorie ratios.
-STEP 7: Assign confidence scores (0.0-1.0).
-STEP 8: For each dish, determine if the menu image contains a photograph of that dish (set has_image_in_menu accordingly).
-STEP 9: Detect ALL allergens for each dish. Check every ingredient against all 14 major allergens (Gluten, Dairy, Eggs, Peanuts, Tree Nuts, Soy, Fish, Shellfish, Wheat, Sesame, Celery, Mustard, Lupin, Molluscs, Sulfites). Also check for cross-contamination risks from shared cooking equipment (e.g. fryers shared with gluten/shellfish). Mark severity as definite/likely/possible/trace.
+    // ═══ PASS 1: Ensemble — run Gemini Pro + GPT-5 in parallel ═══
+    const [geminiResult, gptResult] = await Promise.allSettled([
+      callAI(LOVABLE_API_KEY, "google/gemini-2.5-pro", messagesPayload, [EXTRACT_MENU_TOOL], { type: "function", function: { name: "extract_menu_analysis" } }),
+      callAI(LOVABLE_API_KEY, "openai/gpt-5", messagesPayload, [EXTRACT_MENU_TOOL], { type: "function", function: { name: "extract_menu_analysis" } }),
+    ]);
 
-Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
-Call extract_menu_analysis with the complete results.`,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}`,
-                },
-              },
-            ],
-          },
-        ],
-        tools: [EXTRACT_MENU_TOOL],
-        tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
+    // Handle rate limits
+    for (const r of [geminiResult, gptResult]) {
+      if (r.status === "rejected" && r.reason?.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (r.status === "rejected" && r.reason?.status === 402) {
         return new Response(
           JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+    }
+
+    const geminiParsed = geminiResult.status === "fulfilled" ? extractParsed(geminiResult.value) : null;
+    const gptParsed = gptResult.status === "fulfilled" ? extractParsed(gptResult.value) : null;
+
+    // Use whichever succeeded as primary, with the other as secondary for reconciliation
+    let primaryParsed = geminiParsed || gptParsed;
+    let secondaryParsed = geminiParsed ? gptParsed : null;
+
+    if (!primaryParsed) {
       return new Response(
-        JSON.stringify({ error: "Failed to analyze menu" }),
+        JSON.stringify({ error: "Both models failed to analyze the menu" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const data = await response.json();
+    let dishes = Array.isArray(primaryParsed) ? primaryParsed : primaryParsed.dishes || [];
+    const restaurantContext = primaryParsed.restaurant_context || null;
 
-    // Extract from tool call response
-    let parsed: any = null;
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall?.function?.arguments) {
-      try {
-        parsed = JSON.parse(toolCall.function.arguments);
-      } catch (e) {
-        console.error("Failed to parse tool call arguments:", e);
+    // Reconcile with secondary model if available
+    if (secondaryParsed) {
+      const secondaryDishes = Array.isArray(secondaryParsed) ? secondaryParsed : secondaryParsed.dishes || [];
+      if (secondaryDishes.length > 0) {
+        console.log(`Reconciling ${dishes.length} primary dishes with ${secondaryDishes.length} secondary dishes`);
+        dishes = reconcileDishes(dishes, secondaryDishes);
       }
     }
 
-    // Fallback: try content field (in case model didn't use tool calling)
-    if (!parsed) {
-      const content = data.choices?.[0]?.message?.content;
-      if (content) {
-        try {
-          let jsonStr = content.trim();
-          if (jsonStr.startsWith("```")) {
-            jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-          }
-          parsed = JSON.parse(jsonStr);
-        } catch (e) {
-          console.error("Failed to parse content fallback:", e);
-          return new Response(
-            JSON.stringify({ error: "Failed to parse menu analysis" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+    console.log(`Ensemble pass complete: ${dishes.length} dishes. ${secondaryParsed ? "Both models contributed." : "Single model only."}`);
+
+    // ═══ PASS 2: Verification — second model pass to check/correct ═══
+    const dishSummaries = dishes.map(d => {
+      if (!d.nutrition || d.nutrition === "unavailable") return `- ${d.dish}: nutrition unavailable`;
+      return `- ${d.dish}: ${d.nutrition.calories_kcal} kcal, P:${d.nutrition.protein_g}g, C:${d.nutrition.carbs_g}g, F:${d.nutrition.fat_g}g, portion:${d.portion_size_g}g, method:${d.cooking_method}, confidence:${d.confidence_score}`;
+    }).join("\n");
+
+    const verificationPrompt = `You are a senior nutrition auditor. Review these menu analysis results for accuracy.
+
+## Restaurant Context
+Type: ${restaurantContext?.type || "unknown"}, Cuisine: ${restaurantContext?.cuisine || "unknown"}, Portions: ${restaurantContext?.portion_style || "unknown"}, Price: ${restaurantContext?.price_tier || "unknown"}
+
+## Dishes to Verify
+${dishSummaries}
+
+${FEW_SHOT_EXAMPLES}
+
+## YOUR TASK
+For EACH dish:
+1. Verify the calorie range is plausible for the dish type, cuisine, and restaurant context
+2. Check that protein + carbs + fat (in kcal) sum within 15% of total calories (P*4 + C*4 + F*9 ≈ total)
+3. Verify portion size is realistic for the restaurant type
+4. Compare against the calibration examples — flag obvious outliers
+5. If a dish is wrong, provide corrected values. If correct, mark is_correct: true
+
+Be conservative — only correct clear errors (>20% off). Minor variations within ranges are acceptable.
+Call verify_nutrition with your corrections.`;
+
+    try {
+      // Use the faster model for verification to avoid rate limits
+      const verifyResponse = await callAI(
+        LOVABLE_API_KEY,
+        "google/gemini-2.5-flash",
+        [
+          { role: "system", content: "You are a nutrition verification expert. Check analysis results for accuracy and correct errors." },
+          { role: "user", content: verificationPrompt },
+        ],
+        [VERIFY_TOOL],
+        { type: "function", function: { name: "verify_nutrition" } }
+      );
+
+      const verifyParsed = extractParsed(verifyResponse);
+      if (verifyParsed?.corrections) {
+        let correctionCount = 0;
+        for (const correction of verifyParsed.corrections) {
+          if (correction.is_correct) continue;
+          const dish = dishes.find(d => d.dish?.toLowerCase() === correction.dish?.toLowerCase());
+          if (!dish || !dish.nutrition || dish.nutrition === "unavailable") continue;
+
+          dish.nutrition.calories_kcal = correction.corrected_calories;
+          dish.nutrition.protein_g = correction.corrected_protein;
+          dish.nutrition.carbs_g = correction.corrected_carbs;
+          dish.nutrition.fat_g = correction.corrected_fat;
+          dish.nutrition.sodium_mg = correction.corrected_sodium;
+          dish.confidence = correction.corrected_confidence;
+          dish.confidence_score = correction.corrected_confidence_score;
+          dish.data_sources = [...new Set([...(dish.data_sources || []), "Verification Pass"])];
+          correctionCount++;
         }
+        console.log(`Verification pass: ${correctionCount} corrections applied out of ${verifyParsed.corrections.length} dishes checked`);
       }
+    } catch (verifyErr: any) {
+      // Verification is best-effort — don't fail the whole request
+      console.warn("Verification pass failed (non-critical):", verifyErr?.message || verifyErr);
     }
 
-    if (!parsed) {
-      return new Response(
-        JSON.stringify({ error: "No analysis returned from AI" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const dishes = Array.isArray(parsed) ? parsed : parsed.dishes || [];
-    const restaurantContext = parsed.restaurant_context || null;
-
-    // Post-processing: validate macro-calorie consistency
+    // ═══ Post-processing: final sanity check ═══
     for (const dish of dishes) {
       if (dish.nutrition && typeof dish.nutrition === "object") {
         const midCal = parseMid(dish.nutrition.calories_kcal);
@@ -313,13 +521,25 @@ Call extract_menu_analysis with the complete results.`,
       }
     }
 
-    console.log("Successfully analyzed menu, found", dishes.length, "dishes");
+    console.log("Pipeline complete:", dishes.length, "dishes analyzed");
 
     return new Response(
       JSON.stringify({ dishes, restaurant_context: restaurantContext }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status === 429) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (error?.status === 402) {
+      return new Response(
+        JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     console.error("Error analyzing menu:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
@@ -327,11 +547,3 @@ Call extract_menu_analysis with the complete results.`,
     );
   }
 });
-
-function parseMid(value: string | number): number {
-  if (!value) return 0;
-  if (typeof value === "number") return value;
-  const parts = value.split(/[-–]/).map((v) => parseFloat(v.trim()));
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return (parts[0] + parts[1]) / 2;
-  return parseFloat(value) || 0;
-}
