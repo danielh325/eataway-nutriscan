@@ -23,38 +23,44 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
   return (
     <div className="animate-fade-in">
-      {/* Top summary bar */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-6 pb-4 border-b border-border">
-        {restaurantContext && (
-          <RestaurantContext context={restaurantContext} />
-        )}
-        <div className="flex items-center gap-6 ml-auto text-sm font-mono text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Utensils className="w-3.5 h-3.5" />
-            {totalDishes} dishes
-          </span>
-          <span className="flex items-center gap-1.5">
-            <BarChart3 className="w-3.5 h-3.5" />
-            {availableNutrition} analyzed
-          </span>
-          <span className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            {highConfidence} high conf.
-          </span>
+      {/* Summary header — sticky on scroll */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-4 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 pb-4 border-b border-border">
+          {restaurantContext && (
+            <div className="flex-1 min-w-0">
+              <RestaurantContext context={restaurantContext} />
+            </div>
+          )}
+          <div className="flex items-center gap-4 md:gap-6 text-sm font-mono text-muted-foreground shrink-0">
+            <span className="flex items-center gap-1.5">
+              <Utensils className="w-3.5 h-3.5" />
+              {totalDishes} dishes
+            </span>
+            <span className="flex items-center gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5" />
+              {availableNutrition} analyzed
+            </span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {highConfidence} high conf.
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Dishes grid — 2 columns on wide screens */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Responsive masonry-like grid */}
+      <div className="columns-1 md:columns-2 xl:columns-3 gap-4 space-y-4">
         {dishes.map((dish, index) => (
-          <DishCard key={index} dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
+          <div key={index} className="break-inside-avoid">
+            <DishCard dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
+          </div>
         ))}
       </div>
 
-      {/* Footer Note */}
-      <div className="mt-6 p-3 bg-secondary/50 rounded-xl border border-border">
+      {/* Footer */}
+      <div className="mt-8 p-4 bg-secondary/50 rounded-xl border border-border">
         <p className="text-xs text-muted-foreground text-center">
-          Multi-method verified estimates. Use portion sliders and ingredient toggles to refine.
+          Multi-method verified estimates. Expand dishes to adjust portions and ingredients.
           {!isLoggedIn && " Sign in to save dishes to your daily health log."}
         </p>
       </div>
