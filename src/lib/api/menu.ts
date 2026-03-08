@@ -12,6 +12,15 @@ export interface AnalyzeMenuResponse {
   dishes?: DishData[];
   restaurant_context?: RestaurantContextData | null;
   error?: string;
+  imageBase64?: string;
+  mimeType?: string;
+}
+
+export interface MenuImageMatch {
+  dish_name: string;
+  image_url: string;
+  food_description: string;
+  match_confidence: number;
 }
 
 export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
@@ -37,10 +46,34 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
     return {
       dishes: data.dishes,
       restaurant_context: data.restaurant_context || null,
+      imageBase64: base64,
+      mimeType: file.type,
     };
   } catch (err) {
     console.error("Error calling analyze-menu:", err);
     return { error: err instanceof Error ? err.message : "Failed to analyze menu" };
+  }
+}
+
+export async function extractMenuImages(
+  imageBase64: string,
+  mimeType: string,
+  dishNames: string[]
+): Promise<MenuImageMatch[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke("extract-menu-images", {
+      body: { imageBase64, mimeType, dish_names: dishNames },
+    });
+
+    if (error) {
+      console.warn("Extract menu images error:", error);
+      return [];
+    }
+
+    return data?.matches || [];
+  } catch (err) {
+    console.warn("Error extracting menu images:", err);
+    return [];
   }
 }
 
