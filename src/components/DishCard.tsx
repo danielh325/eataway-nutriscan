@@ -55,6 +55,7 @@ interface DishCardProps {
   isLoggedIn?: boolean;
   externalImage?: string;
   imageLoading?: boolean;
+  imageQueued?: boolean;
 }
 
 const parseRangeMid = (value: string): number => {
