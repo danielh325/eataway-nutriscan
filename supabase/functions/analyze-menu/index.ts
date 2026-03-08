@@ -176,8 +176,13 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: `Analyze this menu image. Extract EVERY dish. Use ALL 7 methods. This is health-critical.
-Call extract_menu_analysis with complete results.`,
+                text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
+
+MANDATORY: Extract EVERY SINGLE item on this menu — every dish, appetizer, starter, main, side, dessert, drink, combo, and special. Do NOT skip any section of the menu. Scan systematically from top to bottom, left to right, covering every column and section visible in the image.
+
+After your first extraction pass, do a SECOND pass to verify you haven't missed anything. Missing even one dish is a critical failure.
+
+Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.`,
               },
               {
                 type: "image_url",
