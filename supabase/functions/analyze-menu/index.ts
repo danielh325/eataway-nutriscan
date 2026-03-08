@@ -6,28 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are a world-class food nutrition analyst performing a **Multi-Method Verified Extraction Pipeline**. Your analysis directly impacts human health decisions — accuracy is paramount.
+const SYSTEM_PROMPT = `You are a world-class food nutrition analyst. Your analysis directly impacts human health decisions — accuracy is paramount.
 
 ## MULTI-METHOD VERIFICATION ARCHITECTURE
 
-You must apply ALL of these methods in parallel and cross-reference results:
+Apply ALL methods in parallel and cross-reference:
 
 ### METHOD 1: Visual Ingredient Decomposition (VID)
-- Identify every visible or described ingredient from the menu image
+- Identify every visible/described ingredient from the menu image
 - Note preparation method (grilled, fried, steamed, braised, etc.)
 - Detect hidden calorie sources: oils, butter, sauces, glazes, breading
 - Identify portion indicators: plate size, utensils, hands for scale
 
 ### METHOD 2: Recipe Reconstruction (RR)
-- For each dish, reconstruct the most likely professional kitchen recipe
+- Reconstruct the most likely professional kitchen recipe for each dish
 - Specify exact quantities (e.g., "2 tbsp olive oil", "200g chicken breast")
-- Include ALL cooking fats, marinades, and finishing touches
-- Reference canonical recipes from established culinary databases (e.g., Escoffier, Serious Eats, ATK)
+- Include ALL cooking fats, marinades, finishing touches
+- Reference canonical recipes (Escoffier, Serious Eats, ATK, Bon Appétit)
 
 ### METHOD 3: Database Cross-Reference (DCR)
 - Cross-reference USDA FoodData Central for raw ingredient values
-- Check against known restaurant chain nutrition disclosures when applicable
-- Compare with Nutritionix, CalorieKing, and MyFitnessPal community data
+- Check against known restaurant chain nutrition disclosures
+- Compare with Nutritionix, CalorieKing, MyFitnessPal community data
 - Flag discrepancies > 20% between sources
 
 ### METHOD 4: Contextual Calibration (CC)
@@ -35,106 +35,117 @@ You must apply ALL of these methods in parallel and cross-reference results:
   - Fast food: standardized, use chain data
   - Fine dining: 120-200g protein, artistic plating, rich sauces
   - Casual dining: 200-300g protein, generous sides
-  - Street food / ethnic: variable, use cultural portion norms
-- Adjust for regional cooking styles (e.g., Southern US = more butter/oil)
-- Account for menu price as portion proxy ($8 vs $28 entrée)
+  - Street food/ethnic: variable, use cultural portion norms
+- Adjust for regional cooking styles
+- Account for menu price as portion proxy
 
 ### METHOD 5: Sanity Check & Outlier Detection (SCOD)
 - Verify calorie density is physically plausible (protein ~4kcal/g, carbs ~4kcal/g, fat ~9kcal/g)
-- Flag any dish where macros don't sum to within 10% of total calories
-- Compare against similar dishes in the same cuisine category
-- If confidence < 0.5, mark nutrition as "unavailable" with specific reason
+- Ensure macros sum to within 10% of total calories
+- Compare against similar dishes in same cuisine category
+- If confidence < 0.5, mark nutrition as "unavailable"
 
-## PIPELINE STEPS (execute in order)
+### METHOD 6: Cooking Loss & Absorption Modeling (CLAM)
+- Apply moisture loss factors: grilling (-20-30% weight), frying (-15-25%), baking (-10-20%)
+- Calculate oil absorption: deep-fry (+8-15% weight in oil), pan-fry (+5-10%), stir-fry (+3-5%)
+- Account for nutrient degradation from heat (vitamin C -30-50%, B vitamins -20-40%)
+- Model Maillard reaction products and caramelization effects on final macros
 
-### STEP 1: Restaurant Context Detection
-- Identify restaurant type, cuisine style, portion style, price tier
-- Detect branding, visual scale references
+### METHOD 7: Culinary Fingerprinting (CF)
+- Identify dish by cuisine-specific preparation signatures
+- Cross-reference with traditional recipes from authoritative cultural sources
+- Detect fusion elements that modify standard preparations
+- Use dish name etymology to infer preparation method when ambiguous
 
-### STEP 2: Dish Extraction & Full Recipe Reconstruction
-For each dish:
-- Extract EXACT dish name as printed
-- Read description text carefully
-- Reconstruct full recipe with specific quantities using Method 2 (RR)
-- Decompose into components: protein, carbs, vegetables, sauces, oils, cooking method
-- Identify default vs optional ingredients
+## CRITICAL RULES
+1. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
+2. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
+3. If confidence < 0.5, set nutrition to "unavailable" string
+4. Include recipe reconstruction for every dish
+5. Include verification_notes explaining cross-referencing logic
+6. Nutrition ranges must be strings like "650-800", never numbers`;
 
-### STEP 3: Multi-Source Nutrition Calculation
-- Calculate using USDA reference values (Method 3)
-- Cross-validate with restaurant data if available
-- Apply cooking method multipliers:
-  - Deep-fried: +30-50% fat vs grilled
-  - Pan-fried in butter: +100-150 kcal per tbsp butter
-  - Creamy sauce: +150-300 kcal
-  - Cheese topping: +80-120 kcal per 30g
-- Always use RANGES (min-max), never single values
-
-### STEP 4: Confidence Scoring with Justification
-- "high" (0.85-1.0): Standard dish, clear ingredients, well-known cuisine, multiple source agreement
-- "medium" (0.5-0.84): Known type but prep varies, some ambiguity, sources diverge slightly
-- "low" (0.0-0.49): Ambiguous, fusion, unclear — mark nutrition "unavailable"
-
-## OUTPUT FORMAT
-Return a JSON object with this exact structure:
-{
-  "restaurant_context": {
-    "type": "casual dining",
-    "cuisine": "Italian-American",
-    "portion_style": "generous",
-    "price_tier": "mid-range"
+// Tool calling schema for structured output
+const EXTRACT_MENU_TOOL = {
+  type: "function",
+  function: {
+    name: "extract_menu_analysis",
+    description: "Extract structured menu analysis with dishes, nutrition, and confidence scores from a menu image.",
+    parameters: {
+      type: "object",
+      properties: {
+        restaurant_context: {
+          type: "object",
+          properties: {
+            type: { type: "string", description: "Restaurant type e.g. casual dining, fast food, fine dining" },
+            cuisine: { type: "string", description: "Cuisine style e.g. Italian-American, Japanese, Mexican" },
+            portion_style: { type: "string", description: "Portion style e.g. generous, moderate, small" },
+            price_tier: { type: "string", description: "Price tier e.g. budget, mid-range, upscale" },
+          },
+          required: ["type", "cuisine", "portion_style", "price_tier"],
+        },
+        dishes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              dish: { type: "string", description: "Exact dish name as printed on menu" },
+              confidence: { type: "string", enum: ["high", "medium", "low"] },
+              confidence_score: { type: "number", description: "0.0-1.0 confidence score" },
+              ingredients_detected: { type: "array", items: { type: "string" }, description: "All detected ingredients with quantities" },
+              default_ingredients: { type: "array", items: { type: "string" }, description: "Ingredients included by default" },
+              optional_additions: { type: "array", items: { type: "string" }, description: "Optional add-on ingredients" },
+              optional_removals: { type: "array", items: { type: "string" }, description: "Ingredients that can be removed" },
+              cooking_method: { type: "string", description: "Primary cooking method" },
+              portion_size_g: { type: "number", description: "Estimated portion weight in grams" },
+              recipe: {
+                type: "object",
+                properties: {
+                  method: { type: "string", description: "Full recipe reconstruction" },
+                  key_quantities: { type: "array", items: { type: "string" }, description: "Key ingredient quantities" },
+                },
+                required: ["method", "key_quantities"],
+              },
+              nutrition: {
+                type: "object",
+                properties: {
+                  calories_kcal: { type: "string", description: "Calorie range e.g. '650-800'" },
+                  protein_g: { type: "string", description: "Protein range e.g. '35-45'" },
+                  carbs_g: { type: "string", description: "Carbs range e.g. '40-55'" },
+                  fat_g: { type: "string", description: "Fat range e.g. '30-42'" },
+                  fiber_g: { type: "string", description: "Fiber range e.g. '2-4'" },
+                  sugar_g: { type: "string", description: "Sugar range e.g. '8-12'" },
+                  sodium_mg: { type: "string", description: "Sodium range e.g. '900-1200'" },
+                },
+                required: ["calories_kcal", "protein_g", "carbs_g", "fat_g", "sodium_mg"],
+              },
+              per_ingredient_nutrition: {
+                type: "object",
+                description: "Nutrition per ingredient. Keys MUST match names in optional_additions, optional_removals, and top default ingredients exactly.",
+                additionalProperties: {
+                  type: "object",
+                  properties: {
+                    calories_kcal: { type: "number" },
+                    protein_g: { type: "number" },
+                    carbs_g: { type: "number" },
+                    fat_g: { type: "number" },
+                  },
+                  required: ["calories_kcal", "protein_g", "carbs_g", "fat_g"],
+                },
+              },
+              verification_notes: { type: "string", description: "Cross-referencing logic and data sources used" },
+              data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
+              notes: { type: "string", description: "Additional notes about the dish" },
+            },
+            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "verification_notes", "data_sources"],
+          },
+        },
+      },
+      required: ["restaurant_context", "dishes"],
+      additionalProperties: false,
+    },
   },
-  "dishes": [
-    {
-      "dish": "Exact Menu Name",
-      "confidence": "high",
-      "confidence_score": 0.92,
-      "ingredients_detected": ["8oz beef patty", "brioche bun", "cheddar cheese", "lettuce", "tomato", "pickle", "special sauce"],
-      "default_ingredients": ["8oz beef patty", "brioche bun", "cheddar cheese", "lettuce", "tomato", "pickle", "special sauce"],
-      "optional_additions": ["extra cheese", "bacon", "avocado", "fried egg", "jalapeños"],
-      "optional_removals": ["cheese", "sauce", "pickle", "lettuce", "tomato"],
-      "cooking_method": "grilled",
-      "portion_size_g": 350,
-      "recipe": {
-        "method": "Form 8oz 80/20 ground beef into patty, season with salt and pepper. Grill over high heat 4 min per side. Toast brioche bun on grill. Assemble with 1 slice cheddar, lettuce, tomato, pickles, 1.5 tbsp special sauce.",
-        "key_quantities": ["227g beef patty (80/20)", "1 brioche bun ~70g", "28g cheddar", "1.5 tbsp sauce"]
-      },
-      "nutrition": {
-        "calories_kcal": "650-800",
-        "protein_g": "35-45",
-        "carbs_g": "40-55",
-        "fat_g": "30-42",
-        "fiber_g": "2-4",
-        "sugar_g": "8-12",
-        "sodium_mg": "900-1200"
-      },
-      "per_ingredient_nutrition": {
-        "8oz beef patty": { "calories_kcal": 400, "protein_g": 35, "carbs_g": 0, "fat_g": 28 },
-        "brioche bun": { "calories_kcal": 150, "protein_g": 4, "carbs_g": 28, "fat_g": 3 },
-        "cheddar cheese": { "calories_kcal": 80, "protein_g": 5, "carbs_g": 0, "fat_g": 7 },
-        "special sauce": { "calories_kcal": 60, "protein_g": 0, "carbs_g": 3, "fat_g": 6 },
-        "extra cheese": { "calories_kcal": 80, "protein_g": 5, "carbs_g": 0, "fat_g": 7 },
-        "bacon": { "calories_kcal": 120, "protein_g": 8, "carbs_g": 0, "fat_g": 10 },
-        "avocado": { "calories_kcal": 80, "protein_g": 1, "carbs_g": 4, "fat_g": 7 },
-        "fried egg": { "calories_kcal": 90, "protein_g": 6, "carbs_g": 0, "fat_g": 7 },
-        "jalapeños": { "calories_kcal": 5, "protein_g": 0, "carbs_g": 1, "fat_g": 0 },
-        "pickle": { "calories_kcal": 5, "protein_g": 0, "carbs_g": 1, "fat_g": 0 },
-        "lettuce": { "calories_kcal": 5, "protein_g": 0, "carbs_g": 1, "fat_g": 0 },
-        "tomato": { "calories_kcal": 5, "protein_g": 0, "carbs_g": 1, "fat_g": 0 }
-      },
-      "verification_notes": "Cross-checked with USDA #23567 (ground beef 80/20). Calorie range accounts for bun size variance and sauce amount.",
-      "data_sources": ["USDA FoodData Central", "Nutritionix"],
-      "notes": "Standard burger. Assumes single 8oz patty, one slice cheese, standard condiments."
-    }
-  ]
-}
-
-CRITICAL RULES:
-1. Respond with ONLY valid JSON. No markdown code blocks, no explanation text.
-2. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names, plus top calorie-contributing defaults.
-3. NEVER guess single-value numbers — always use ranges.
-4. If confidence < 0.5, set nutrition to "unavailable" with a reason field.
-5. Include recipe reconstruction for every dish.
-6. Include verification_notes explaining your cross-referencing logic.`;
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -160,7 +171,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Analyzing menu with Multi-Method Verified Extraction Pipeline...");
+    console.log("Analyzing menu with 7-Method Verified Extraction Pipeline + Tool Calling...");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -177,18 +188,18 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: `Execute the Multi-Method Verified Extraction Pipeline on this menu image. This data will be used for health-critical nutrition tracking.
+                text: `Analyze this menu image using ALL 7 methods (VID, RR, DCR, CC, SCOD, CLAM, CF). This is health-critical.
 
-STEP 1: Identify restaurant context (type, cuisine, portion style, price tier).
-STEP 2: Extract every dish. For each, reconstruct the FULL RECIPE with specific quantities. Decompose into ingredients with cooking methods.
-STEP 3: Calculate nutrition using ALL 5 methods (VID, RR, DCR, CC, SCOD). Cross-reference USDA data. Use RANGES not single values.
-STEP 4: Run sanity checks — verify macro-to-calorie ratios, flag outliers.
-STEP 5: Assign confidence scores (0.0-1.0). If < 0.5, mark nutrition as "unavailable".
+STEP 1: Identify restaurant context.
+STEP 2: Extract every dish. Reconstruct FULL RECIPE with specific quantities.
+STEP 3: Calculate nutrition using ALL methods. Cross-reference USDA data. Use RANGES.
+STEP 4: Apply cooking loss & absorption modeling.
+STEP 5: Use culinary fingerprinting for dish identification.
+STEP 6: Run sanity checks — verify macro-to-calorie ratios.
+STEP 7: Assign confidence scores (0.0-1.0).
 
 Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
-Include recipe reconstruction with key_quantities.
-Include verification_notes for each dish.
-Return strict JSON only.`,
+Call extract_menu_analysis with the complete results.`,
               },
               {
                 type: "image_url",
@@ -199,6 +210,8 @@ Return strict JSON only.`,
             ],
           },
         ],
+        tools: [EXTRACT_MENU_TOOL],
+        tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
       }),
     });
 
@@ -224,30 +237,41 @@ Return strict JSON only.`,
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
 
-    if (!content) {
-      console.error("No content in AI response");
-      return new Response(
-        JSON.stringify({ error: "No analysis returned" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Extract from tool call response
+    let parsed: any = null;
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (toolCall?.function?.arguments) {
+      try {
+        parsed = JSON.parse(toolCall.function.arguments);
+      } catch (e) {
+        console.error("Failed to parse tool call arguments:", e);
+      }
     }
 
-    console.log("Raw AI response length:", content.length);
-
-    let parsed;
-    try {
-      let jsonStr = content.trim();
-      if (jsonStr.startsWith("```")) {
-        jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    // Fallback: try content field (in case model didn't use tool calling)
+    if (!parsed) {
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        try {
+          let jsonStr = content.trim();
+          if (jsonStr.startsWith("```")) {
+            jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+          }
+          parsed = JSON.parse(jsonStr);
+        } catch (e) {
+          console.error("Failed to parse content fallback:", e);
+          return new Response(
+            JSON.stringify({ error: "Failed to parse menu analysis" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
-      parsed = JSON.parse(jsonStr);
-    } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
-      console.error("Content was:", content.substring(0, 500));
+    }
+
+    if (!parsed) {
       return new Response(
-        JSON.stringify({ error: "Failed to parse menu analysis", raw: content }),
+        JSON.stringify({ error: "No analysis returned from AI" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -257,7 +281,7 @@ Return strict JSON only.`,
 
     // Post-processing: validate macro-calorie consistency
     for (const dish of dishes) {
-      if (dish.nutrition && dish.nutrition !== "unavailable") {
+      if (dish.nutrition && typeof dish.nutrition === "object") {
         const midCal = parseMid(dish.nutrition.calories_kcal);
         const midP = parseMid(dish.nutrition.protein_g);
         const midC = parseMid(dish.nutrition.carbs_g);
@@ -285,8 +309,9 @@ Return strict JSON only.`,
   }
 });
 
-function parseMid(value: string): number {
+function parseMid(value: string | number): number {
   if (!value) return 0;
+  if (typeof value === "number") return value;
   const parts = value.split(/[-–]/).map((v) => parseFloat(v.trim()));
   if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return (parts[0] + parts[1]) / 2;
   return parseFloat(value) || 0;
