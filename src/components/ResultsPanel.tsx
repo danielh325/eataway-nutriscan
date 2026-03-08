@@ -117,8 +117,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   return (
     <div className="animate-fade-in">
       {/* Summary header — sticky on scroll */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm pb-4 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 pb-4 border-b border-border">
+      <div className="sticky top-0 z-10 glass-panel rounded-2xl px-4 py-3 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 pb-3 border-b border-border/50">
           {restaurantContext && (
             <div className="flex-1 min-w-0">
               <RestaurantContext context={restaurantContext} />
@@ -159,7 +159,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       </div>
 
       {/* Footer */}
-      <div className="mt-8 p-4 bg-secondary/50 rounded-xl border border-border">
+      <div className="mt-8 p-4 glass-panel rounded-2xl">
         <p className="text-xs text-muted-foreground text-center">
           Multi-method verified estimates. Expand dishes to adjust portions and ingredients.
           {!isLoggedIn && " Sign in to save dishes to your daily health log."}

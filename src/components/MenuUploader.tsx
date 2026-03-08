@@ -42,7 +42,7 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
   if (preview) {
     return (
       <div className="relative w-full animate-fade-in">
-        <div className="relative overflow-hidden rounded-lg border-2 border-foreground">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card">
           <img
             src={preview}
             alt="Menu preview"
@@ -51,15 +51,15 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
           {isProcessing && (
             <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
               <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-foreground border-t-transparent rounded-full animate-spin" />
-                <p className="font-mono text-sm tracking-wide">ANALYZING MENU...</p>
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="font-mono text-sm tracking-wide text-primary">ANALYZING MENU...</p>
               </div>
             </div>
           )}
           {!isProcessing && (
             <button
               onClick={clearPreview}
-              className="absolute top-3 right-3 p-2 bg-background border border-foreground rounded-full hover:bg-secondary transition-colors"
+              className="absolute top-3 right-3 p-2 bg-card/80 backdrop-blur border border-border rounded-full hover:bg-secondary transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -78,10 +78,10 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
       onDragLeave={() => setIsDragOver(false)}
       onDrop={handleDrop}
       className={cn(
-        "relative w-full border-2 border-dashed rounded-lg p-12 transition-all duration-300 cursor-pointer group",
+        "relative w-full border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer group",
         isDragOver
-          ? "border-foreground bg-secondary"
-          : "border-muted-foreground/30 hover:border-foreground hover:bg-secondary/50"
+          ? "border-primary bg-primary/5"
+          : "border-muted-foreground/20 hover:border-primary/50 hover:bg-card"
       )}
     >
       <input
@@ -92,8 +92,8 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
       />
       <div className="flex flex-col items-center gap-6 text-center">
         <div className="relative">
-          <div className="w-20 h-20 rounded-full border-2 border-foreground flex items-center justify-center group-hover:bg-foreground group-hover:text-primary-foreground transition-colors">
-            <Upload className="w-8 h-8" />
+          <div className="w-20 h-20 rounded-2xl border border-primary/40 bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            <Upload className="w-8 h-8 text-primary group-hover:text-primary-foreground" />
           </div>
         </div>
         <div className="space-y-2">

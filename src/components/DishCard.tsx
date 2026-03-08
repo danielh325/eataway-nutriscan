@@ -159,8 +159,8 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
   return (
     <div
       className={cn(
-        "border-2 rounded-xl overflow-hidden animate-slide-up bg-card transition-all",
-        isLowConfidence ? "border-destructive/50" : "border-foreground"
+        "border rounded-2xl overflow-hidden animate-slide-up bg-card transition-all",
+        isLowConfidence ? "border-destructive/50" : "border-border hover:border-primary/30"
       )}
       style={{ animationDelay: `${index * 80}ms` }}
     >
@@ -244,7 +244,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t-2 border-foreground/20">
+        <div className="border-t border-border/50">
           {/* Ingredients */}
           <div className="p-4 md:p-5 border-b border-border">
             <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-3">
@@ -436,7 +436,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
             {onSave && hasNutrition && adjustedNutrition && (
               <button
                 onClick={() => onSave(dish, adjustedNutrition.calories_kcal, adjustedNutrition.protein_g, adjustedNutrition.carbs_g, adjustedNutrition.fat_g, portionMultiplier)}
-                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity glow-primary"
               >
                 <Save className="w-3.5 h-3.5" />
                 {isLoggedIn ? "Save to Daily Log" : "Sign in to Save"}
