@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
-import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
+import { Utensils, BarChart3, ShieldCheck, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { extractMenuImages } from "@/lib/api/menu";
+import { Button } from "@/components/ui/button";
 
 interface RestaurantContextData {
   type?: string;
