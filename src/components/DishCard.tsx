@@ -212,7 +212,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
             <h3 className="font-semibold text-base md:text-lg tracking-tight truncate">
               {dish.dish}
             </h3>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               {adjustedNutrition && (
                 <span className="text-sm text-muted-foreground font-mono">
                   {adjustedNutrition.calories_kcal} kcal
@@ -221,6 +221,12 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
               {dish.cooking_method && (
                 <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
                   {dish.cooking_method}
+                </span>
+              )}
+              {dish.allergens && dish.allergens.filter(a => a.severity === "definite" || a.severity === "likely").length > 0 && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-destructive/15 text-destructive border border-destructive/30">
+                  ⚠ {dish.allergens.filter(a => a.severity === "definite" || a.severity === "likely").map(a => a.name).filter((v, i, arr) => arr.indexOf(v) === i).slice(0, 3).join(", ")}
+                  {dish.allergens.filter(a => a.severity === "definite" || a.severity === "likely").map(a => a.name).filter((v, i, arr) => arr.indexOf(v) === i).length > 3 ? "…" : ""}
                 </span>
               )}
             </div>
