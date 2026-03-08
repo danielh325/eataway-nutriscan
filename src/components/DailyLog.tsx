@@ -80,10 +80,11 @@ export const DailyLog = () => {
   }, [user]);
 
   const fetchGoals = async () => {
+    if (!user) return;
     const { data } = await supabase
       .from("daily_goals")
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .maybeSingle();
     if (data) {
       const g = { calories_kcal: data.calories_kcal, protein_g: data.protein_g, carbs_g: data.carbs_g, fat_g: data.fat_g };
