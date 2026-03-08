@@ -1,92 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* NutriScan Design System — Deep navy + emerald green accent
+   Inspired by Apple Maps glassmorphic minimalism. All colors HSL. */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 4%;
+    /* Dark mode by default — deep navy base */
+    --background: 220 20% 7%;
+    --foreground: 210 20% 98%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 4%;
+    --card: 220 18% 10%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 4%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 0 0% 4%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 152 60% 52%;
+    --primary-foreground: 220 20% 7%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 4%;
+    --secondary: 220 16% 14%;
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 12% 50%;
 
-    --accent: 0 0% 92%;
-    --accent-foreground: 0 0% 4%;
+    --accent: 152 40% 92%;
+    --accent-foreground: 220 20% 10%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 210 20% 98%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --success: 152 60% 52%;
+    --success-foreground: 220 20% 7%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 4%;
+    --warning-foreground: 220 20% 7%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 4%;
+    --border: 220 12% 16%;
+    --input: 220 12% 16%;
+    --ring: 152 60% 52%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
-    --confidence-high: 142 76% 36%;
+    --confidence-high: 152 60% 52%;
     --confidence-medium: 38 92% 50%;
     --confidence-low: 0 84% 60%;
+
+    /* Glassmorphic surface tokens */
+    --glass: 220 18% 12%;
+    --glass-border: 220 12% 20%;
   }
 
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
+    /* Already dark by default, but keep for completeness */
+    --background: 220 20% 7%;
+    --foreground: 210 20% 98%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 220 18% 10%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 4%;
+    --primary: 152 60% 52%;
+    --primary-foreground: 220 20% 7%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 220 16% 14%;
+    --secondary-foreground: 210 20% 98%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 64%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 12% 50%;
 
-    --accent: 0 0% 18%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 152 40% 92%;
+    --accent-foreground: 220 20% 10%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 210 20% 98%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --success: 152 60% 52%;
+    --success-foreground: 220 20% 7%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 4%;
+    --warning-foreground: 220 20% 7%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 83%;
+    --border: 220 12% 16%;
+    --input: 220 12% 16%;
+    --ring: 152 60% 52%;
 
-    --confidence-high: 142 76% 36%;
+    --confidence-high: 152 60% 52%;
     --confidence-medium: 38 92% 50%;
     --confidence-low: 0 84% 60%;
+
+    --glass: 220 18% 12%;
+    --glass-border: 220 12% 20%;
   }
 }
 
@@ -96,6 +106,22 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Glassmorphic utility classes */
+@layer utilities {
+  .glass-panel {
+    background: hsl(var(--glass) / 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--glass-border) / 0.5);
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.3);
   }
 }
