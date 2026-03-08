@@ -73,7 +73,6 @@ export default {
           low: "hsl(var(--confidence-low))",
         },
       },
-      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
