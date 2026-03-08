@@ -135,8 +135,20 @@ const EXTRACT_MENU_TOOL = {
                   required: ["calories_kcal", "protein_g", "carbs_g", "fat_g"],
                 },
               },
+              allergens: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Allergen name e.g. Gluten, Dairy, Nuts, Shellfish, Eggs, Soy, Fish, Sesame, Peanuts, Tree Nuts, Wheat, Celery, Mustard, Lupin, Molluscs, Sulfites" },
+                    severity: { type: "string", enum: ["definite", "likely", "possible", "trace"], description: "How certain the allergen is present" },
+                    source_ingredient: { type: "string", description: "Which ingredient contains this allergen" },
+                  },
+                  required: ["name", "severity", "source_ingredient"],
+                },
+                description: "All allergens detected in the dish based on ingredients, cooking method, and cross-contamination risk. Cover all 14 major allergens (EU/FDA) plus common sensitivities.",
+              },
               has_image_in_menu: { type: "boolean", description: "Whether the menu image contains a photo of this specific dish" },
-              verification_notes: { type: "string", description: "Cross-referencing logic and data sources used" },
               data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
               notes: { type: "string", description: "Additional notes about the dish" },
             },
