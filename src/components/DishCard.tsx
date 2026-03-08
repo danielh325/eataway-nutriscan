@@ -64,8 +64,20 @@ const parseRangeMid = (value: string): number => {
   if (dashParts.length === 2 && !isNaN(dashParts[0]) && !isNaN(dashParts[1])) return (dashParts[0] + dashParts[1]) / 2;
   return parseFloat(value) || 0;
 };
+const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngredientNutrition>): PerIngredientNutrition | null => {
+  const lower = name.toLowerCase();
+  if (perIngr[name]) return perIngr[name];
+  for (const key of Object.keys(perIngr)) {
+    if (key.toLowerCase() === lower) return perIngr[key];
+  }
+  for (const key of Object.keys(perIngr)) {
+    const keyLower = key.toLowerCase();
+    if (keyLower.includes(lower) || lower.includes(keyLower)) return perIngr[key];
+  }
+  return null;
+};
 
-export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageLoading: externalImageLoading }: DishCardProps) => {
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
