@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Upload, Camera, X, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
