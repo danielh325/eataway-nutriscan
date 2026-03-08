@@ -94,10 +94,11 @@ export const DailyLog = () => {
   };
 
   const fetchTodayLogs = async () => {
+    if (!user) return;
     const { data } = await supabase
       .from("meal_logs")
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .gte("logged_at", startOfDay(today).toISOString())
       .lte("logged_at", endOfDay(today).toISOString())
       .order("logged_at", { ascending: false });
