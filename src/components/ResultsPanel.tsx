@@ -94,24 +94,28 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               },
             });
 
-            // Stop ALL generation if credits are exhausted (402)
-            const isCreditsExhausted =
-              data?.error === "AI credits exhausted" ||
-              error?.message?.includes("402") ||
-              error?.status === 402;
+            // Parse error context from FunctionsHttpError
+            let errorBody: any = null;
+            if (error) {
+              try {
+                // error.context may contain the response; try to get JSON body
+                const ctx = (error as any).context;
+                if (ctx?.json) errorBody = await ctx.json().catch(() => null);
+                else if (ctx?.text) { const t = await ctx.text().catch(() => ""); try { errorBody = JSON.parse(t); } catch {} }
+              } catch {}
+            }
 
-            if (isCreditsExhausted) {
+            const errorMsg = data?.error || errorBody?.error || error?.message || "";
+
+            // Stop ALL generation if credits are exhausted (402)
+            if (errorMsg.includes("credits exhausted") || errorMsg.includes("402") || errorMsg.includes("Payment required")) {
               console.warn("AI credits exhausted — stopping all image generation");
               abortRef.current = true;
               break;
             }
 
-            const isRateLimited =
-              data?.error === "Rate limit exceeded" ||
-              error?.message?.includes("429") ||
-              error?.status === 429;
-
-            if (isRateLimited) {
+            // Rate limited
+            if (errorMsg.includes("Rate limit") || errorMsg.includes("rate limit") || errorMsg.includes("429")) {
               retries++;
               const delay = 3000 * Math.pow(2, retries - 1);
               console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
@@ -123,7 +127,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
               success = true;
             } else if (error || data?.error) {
-              console.warn("Image generation failed for", dish.dish, data?.error || error);
+              console.warn("Image generation failed for", dish.dish, errorMsg);
             }
             break;
           } catch (err: any) {
