@@ -63,9 +63,9 @@ Apply ALL methods in parallel and cross-reference:
 3. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
 4. If confidence < 0.5, set nutrition to "unavailable" string
 5. Include recipe reconstruction for every dish
-6. Include verification_notes explaining cross-referencing logic
-7. Nutrition ranges must be strings like "650-800", never numbers
-8. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish`;
+6. Nutrition ranges must be strings like "650-800", never numbers
+7. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish
+8. Detect ALL allergens for each dish — cross-reference EVERY ingredient against all 14 major allergens plus common sensitivities`;
 
 // Tool calling schema for structured output
 const EXTRACT_MENU_TOOL = {
@@ -135,12 +135,24 @@ const EXTRACT_MENU_TOOL = {
                   required: ["calories_kcal", "protein_g", "carbs_g", "fat_g"],
                 },
               },
+              allergens: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "Allergen name e.g. Gluten, Dairy, Nuts, Shellfish, Eggs, Soy, Fish, Sesame, Peanuts, Tree Nuts, Wheat, Celery, Mustard, Lupin, Molluscs, Sulfites" },
+                    severity: { type: "string", enum: ["definite", "likely", "possible", "trace"], description: "How certain the allergen is present" },
+                    source_ingredient: { type: "string", description: "Which ingredient contains this allergen" },
+                  },
+                  required: ["name", "severity", "source_ingredient"],
+                },
+                description: "All allergens detected in the dish based on ingredients, cooking method, and cross-contamination risk. Cover all 14 major allergens (EU/FDA) plus common sensitivities.",
+              },
               has_image_in_menu: { type: "boolean", description: "Whether the menu image contains a photo of this specific dish" },
-              verification_notes: { type: "string", description: "Cross-referencing logic and data sources used" },
               data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
               notes: { type: "string", description: "Additional notes about the dish" },
             },
-            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "has_image_in_menu", "verification_notes", "data_sources"],
+            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
           },
         },
       },
@@ -203,6 +215,7 @@ STEP 5: Use culinary fingerprinting for dish identification.
 STEP 6: Run sanity checks — verify macro-to-calorie ratios.
 STEP 7: Assign confidence scores (0.0-1.0).
 STEP 8: For each dish, determine if the menu image contains a photograph of that dish (set has_image_in_menu accordingly).
+STEP 9: Detect ALL allergens for each dish. Check every ingredient against all 14 major allergens (Gluten, Dairy, Eggs, Peanuts, Tree Nuts, Soy, Fish, Shellfish, Wheat, Sesame, Celery, Mustard, Lupin, Molluscs, Sulfites). Also check for cross-contamination risks from shared cooking equipment (e.g. fryers shared with gluten/shellfish). Mark severity as definite/likely/possible/trace.
 
 Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
 Call extract_menu_analysis with the complete results.`,
