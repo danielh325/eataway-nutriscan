@@ -159,7 +159,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       </div>
 
       {/* Footer */}
-      <div className="mt-8 p-4 bg-secondary/50 rounded-xl border border-border">
+      <div className="mt-8 p-4 glass-panel rounded-2xl">
         <p className="text-xs text-muted-foreground text-center">
           Multi-method verified estimates. Expand dishes to adjust portions and ingredients.
           {!isLoggedIn && " Sign in to save dishes to your daily health log."}

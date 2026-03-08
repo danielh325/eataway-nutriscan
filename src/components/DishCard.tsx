@@ -244,7 +244,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="border-t-2 border-foreground/20">
+        <div className="border-t border-border/50">
           {/* Ingredients */}
           <div className="p-4 md:p-5 border-b border-border">
             <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-3">
