@@ -193,13 +193,16 @@ serve(async (req) => {
                 type: "text",
                 text: `Analyze this menu image using ALL 7 methods (VID, RR, DCR, CC, SCOD, CLAM, CF). This is health-critical.
 
+CRITICAL: Extract EVERY SINGLE dish/item from the menu. Scan ALL sections, categories, and pages visible. Do NOT skip any item.
+
 STEP 1: Identify restaurant context.
-STEP 2: Extract every dish. Reconstruct FULL RECIPE with specific quantities.
+STEP 2: Extract EVERY dish. Reconstruct FULL RECIPE with specific quantities.
 STEP 3: Calculate nutrition using ALL methods. Cross-reference USDA data. Use RANGES.
 STEP 4: Apply cooking loss & absorption modeling.
 STEP 5: Use culinary fingerprinting for dish identification.
 STEP 6: Run sanity checks — verify macro-to-calorie ratios.
 STEP 7: Assign confidence scores (0.0-1.0).
+STEP 8: For each dish, determine if the menu image contains a photograph of that dish (set has_image_in_menu accordingly).
 
 Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
 Call extract_menu_analysis with the complete results.`,
