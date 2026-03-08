@@ -84,9 +84,33 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
   const [addedIngredients, setAddedIngredients] = useState<Set<string>>(new Set());
+  const [generatedImage, setGeneratedImage] = useState<string | null>(dish.dish_image_url || null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const hasNutrition = dish.nutrition !== "unavailable";
   const isLowConfidence = dish.confidence === "low";
 
+  // Generate image when card first renders if dish has no menu image
+  useEffect(() => {
+    if (!dish.has_image_in_menu && !generatedImage && !imageLoading && !imageError) {
+      setImageLoading(true);
+      supabase.functions.invoke("generate-dish-image", {
+        body: {
+          dish_name: dish.dish,
+          cooking_method: dish.cooking_method,
+          ingredients: dish.ingredients_detected?.slice(0, 5),
+        },
+      }).then(({ data, error }) => {
+        if (error || data?.error) {
+          console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+          setImageError(true);
+        } else if (data?.image_url) {
+          setGeneratedImage(data.image_url);
+        }
+        setImageLoading(false);
+      });
+    }
+  }, [dish.dish]);
   const adjustedNutrition = useMemo(() => {
     if (!hasNutrition || dish.nutrition === "unavailable") return null;
 
