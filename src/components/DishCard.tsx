@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
 import { ConfidenceBadge } from "./ConfidenceBadge";
