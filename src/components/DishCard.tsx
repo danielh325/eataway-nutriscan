@@ -19,6 +19,12 @@ export interface DishRecipe {
   key_quantities?: string[];
 }
 
+export interface AllergenInfo {
+  name: string;
+  severity: "definite" | "likely" | "possible" | "trace";
+  source_ingredient: string;
+}
+
 export interface DishData {
   dish: string;
   confidence: "high" | "medium" | "low";
@@ -43,6 +49,7 @@ export interface DishData {
     sodium_mg: string;
   } | "unavailable";
   per_ingredient_nutrition?: Record<string, PerIngredientNutrition>;
+  allergens?: AllergenInfo[];
   data_sources: string[];
   notes?: string;
   reason?: string;
