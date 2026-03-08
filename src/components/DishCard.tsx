@@ -159,8 +159,8 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
   return (
     <div
       className={cn(
-        "border-2 rounded-xl overflow-hidden animate-slide-up bg-card transition-all",
-        isLowConfidence ? "border-destructive/50" : "border-foreground"
+        "border rounded-2xl overflow-hidden animate-slide-up bg-card transition-all",
+        isLowConfidence ? "border-destructive/50" : "border-border hover:border-primary/30"
       )}
       style={{ animationDelay: `${index * 80}ms` }}
     >
