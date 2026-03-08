@@ -208,7 +208,7 @@ const Index = () => {
             </div>
           </div>
         ) : (
-          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} />
+          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} menuImageBase64={menuImageBase64} menuMimeType={menuMimeType} />
         )}
       </main>
 
