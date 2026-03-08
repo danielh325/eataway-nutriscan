@@ -23,6 +23,8 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<DishData[] | null>(null);
   const [restaurantContext, setRestaurantContext] = useState<RestaurantContextData | null>(null);
+  const [menuImageBase64, setMenuImageBase64] = useState<string | undefined>();
+  const [menuMimeType, setMenuMimeType] = useState<string | undefined>();
   const [showDailyLog, setShowDailyLog] = useState(false);
   const { toast } = useToast();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -44,6 +46,8 @@ const Index = () => {
     } else if (response.dishes) {
       setResults(response.dishes);
       setRestaurantContext(response.restaurant_context || null);
+      setMenuImageBase64(response.imageBase64);
+      setMenuMimeType(response.mimeType);
       toast({
         title: "Menu Analyzed",
         description: `Found ${response.dishes.length} dishes`,
@@ -56,6 +60,8 @@ const Index = () => {
   const handleReset = () => {
     setResults(null);
     setRestaurantContext(null);
+    setMenuImageBase64(undefined);
+    setMenuMimeType(undefined);
     setShowDailyLog(false);
   };
 
@@ -202,7 +208,7 @@ const Index = () => {
             </div>
           </div>
         ) : (
-          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} />
+          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} menuImageBase64={menuImageBase64} menuMimeType={menuMimeType} />
         )}
       </main>
 

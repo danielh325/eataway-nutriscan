@@ -3,6 +3,7 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { extractMenuImages, MenuImageMatch } from "@/lib/api/menu";
 
 interface RestaurantContextData {
   type?: string;
@@ -16,30 +17,70 @@ interface ResultsPanelProps {
   restaurantContext?: RestaurantContextData | null;
   onSaveDish?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
   isLoggedIn?: boolean;
+  menuImageBase64?: string;
+  menuMimeType?: string;
 }
 
-export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn }: ResultsPanelProps) => {
+export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn, menuImageBase64, menuMimeType }: ResultsPanelProps) => {
   const totalDishes = dishes.length;
   const availableNutrition = dishes.filter((d) => d.nutrition !== "unavailable").length;
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
 
-  // Sequential image generation to avoid rate limits
+  // Image state
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
   const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
   const abortRef = useRef(false);
-
   const [activeGenerations, setActiveGenerations] = useState<Set<number>>(new Set());
+  const [extractingMenuImages, setExtractingMenuImages] = useState(false);
+  const [menuExtractedImages, setMenuExtractedImages] = useState<Record<number, string>>({});
 
   useEffect(() => {
     abortRef.current = false;
-    const dishesNeedingImages = dishes
-      .map((d, i) => ({ dish: d, index: i }))
-      .filter(({ dish }) => !dish.has_image_in_menu && !dish.dish_image_url);
-
-    if (dishesNeedingImages.length === 0) return;
-
     let cancelled = false;
-    const generateSequentially = async () => {
+
+    const processImages = async () => {
+      // Step 1: Try to extract real food images from the menu photo
+      const matchedIndices = new Set<number>();
+
+      if (menuImageBase64 && menuMimeType) {
+        setExtractingMenuImages(true);
+        const dishNames = dishes.map(d => d.dish);
+
+        try {
+          const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
+          console.log(`Extracted ${matches.length} real food images from menu`);
+
+          for (const match of matches) {
+            if (cancelled || abortRef.current) break;
+            // Find the dish index that matches
+            const dishIndex = dishes.findIndex(
+              d => d.dish.toLowerCase() === match.dish_name.toLowerCase()
+            );
+            if (dishIndex !== -1 && match.image_url) {
+              matchedIndices.add(dishIndex);
+              setMenuExtractedImages(prev => ({ ...prev, [dishIndex]: match.image_url }));
+              // Also mark as having a real image
+              setGeneratedImages(prev => ({ ...prev, [dishIndex]: match.image_url }));
+            }
+          }
+        } catch (err) {
+          console.warn("Menu image extraction failed, falling back to AI generation:", err);
+        }
+        setExtractingMenuImages(false);
+      }
+
+      if (cancelled || abortRef.current) return;
+
+      // Step 2: Generate AI images for dishes that don't have real photos
+      const dishesNeedingImages = dishes
+        .map((d, i) => ({ dish: d, index: i }))
+        .filter(({ dish, index }) =>
+          !matchedIndices.has(index) &&
+          !dish.dish_image_url
+        );
+
+      if (dishesNeedingImages.length === 0) return;
+
       for (const { dish, index } of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
 
@@ -59,7 +100,6 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               },
             });
 
-            // Handle rate limit from response body
             if (data?.error === "Rate limit exceeded") {
               retries++;
               const delay = 3000 * Math.pow(2, retries - 1);
@@ -78,7 +118,6 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             }
             break;
           } catch (err: any) {
-            // supabase.functions.invoke throws on non-2xx — check for rate limit
             const msg = err?.message || err?.context?.body || "";
             if (typeof msg === "string" && msg.includes("Rate limit")) {
               retries++;
@@ -98,7 +137,6 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
           return next;
         });
 
-        // Wait between dishes to avoid rate limits
         if (!cancelled && !abortRef.current) {
           await new Promise(r => setTimeout(r, 1500));
         }
@@ -106,13 +144,13 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       setImageLoadingIndex(null);
     };
 
-    generateSequentially();
+    processImages();
 
     return () => {
       cancelled = true;
       abortRef.current = true;
     };
-  }, [dishes]);
+  }, [dishes, menuImageBase64, menuMimeType]);
 
   return (
     <div className="animate-fade-in">
@@ -139,6 +177,11 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             </span>
           </div>
         </div>
+        {extractingMenuImages && (
+          <div className="pt-2 text-xs font-mono text-muted-foreground text-center animate-pulse">
+            Extracting food photos from menu…
+          </div>
+        )}
       </div>
 
       {/* Responsive masonry-like grid */}
@@ -151,8 +194,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               onSave={onSaveDish}
               isLoggedIn={isLoggedIn}
               externalImage={generatedImages[index]}
-              imageLoading={activeGenerations.has(index)}
-              imageQueued={!dish.has_image_in_menu && !dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && activeGenerations.size > 0}
+              imageLoading={activeGenerations.has(index) || (extractingMenuImages && !generatedImages[index])}
+              imageQueued={!dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && (activeGenerations.size > 0 || extractingMenuImages)}
             />
           </div>
         ))}
