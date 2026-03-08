@@ -94,6 +94,18 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               },
             });
 
+            // Stop ALL generation if credits are exhausted (402)
+            const isCreditsExhausted =
+              data?.error === "AI credits exhausted" ||
+              error?.message?.includes("402") ||
+              error?.status === 402;
+
+            if (isCreditsExhausted) {
+              console.warn("AI credits exhausted — stopping all image generation");
+              abortRef.current = true;
+              break;
+            }
+
             const isRateLimited =
               data?.error === "Rate limit exceeded" ||
               error?.message?.includes("429") ||
@@ -116,6 +128,11 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             break;
           } catch (err: any) {
             const msg = JSON.stringify(err) + (err?.message || "");
+            if (msg.includes("402") || msg.includes("credits")) {
+              console.warn("AI credits exhausted (catch) — stopping all image generation");
+              abortRef.current = true;
+              break;
+            }
             if (msg.includes("429") || msg.includes("Rate limit") || msg.includes("rate limit")) {
               retries++;
               const delay = 3000 * Math.pow(2, retries - 1);
