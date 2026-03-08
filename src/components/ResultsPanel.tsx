@@ -35,6 +35,9 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const [extractingMenuImages, setExtractingMenuImages] = useState(false);
   const [menuExtractedImages, setMenuExtractedImages] = useState<Record<number, string>>({});
 
+  // Use dish names as stable key to avoid restarting image generation on refinement
+  const dishKey = dishes.map(d => d.dish).join("|");
+
   useEffect(() => {
     abortRef.current = false;
     let cancelled = false;
