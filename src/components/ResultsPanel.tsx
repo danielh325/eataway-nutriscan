@@ -28,6 +28,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
   const abortRef = useRef(false);
 
+  const [activeGenerations, setActiveGenerations] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     abortRef.current = false;
     const dishesNeedingImages = dishes
@@ -37,61 +39,75 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
     if (dishesNeedingImages.length === 0) return;
 
     let cancelled = false;
+    const CONCURRENCY = 3;
 
-    const generateSequentially = async () => {
-      for (const { dish, index } of dishesNeedingImages) {
-        if (cancelled || abortRef.current) break;
+    const generateOne = async (dish: DishData, index: number): Promise<void> => {
+      if (cancelled || abortRef.current) return;
 
-        setImageLoadingIndex(index);
+      setActiveGenerations(prev => new Set(prev).add(index));
 
-        let retries = 0;
-        const maxRetries = 3;
-        let success = false;
+      let retries = 0;
+      const maxRetries = 3;
 
-        while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
-          try {
-            const { data, error } = await supabase.functions.invoke("generate-dish-image", {
-              body: {
-                dish_name: dish.dish,
-                cooking_method: dish.cooking_method,
-                ingredients: dish.ingredients_detected?.slice(0, 5),
-              },
-            });
+      while (retries < maxRetries && !cancelled && !abortRef.current) {
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-dish-image", {
+            body: {
+              dish_name: dish.dish,
+              cooking_method: dish.cooking_method,
+              ingredients: dish.ingredients_detected?.slice(0, 5),
+            },
+          });
 
-            if (data?.error === "Rate limit exceeded") {
-              retries++;
-              const delay = 3000 * Math.pow(2, retries - 1); // 3s, 6s, 12s
-              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-
-            if (!cancelled && !abortRef.current && data?.image_url) {
-              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
-              success = true;
-            }
-
-            if (error || data?.error) {
-              console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
-              break;
-            }
-            
-            success = true;
-          } catch (err) {
-            console.warn("Image generation error for", dish.dish, err);
-            break;
+          if (data?.error === "Rate limit exceeded") {
+            retries++;
+            const delay = 2000 * Math.pow(2, retries - 1);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
           }
-        }
 
-        // Delay between requests to avoid rate limits
-        if (!cancelled && !abortRef.current) {
-          await new Promise(r => setTimeout(r, 2000));
+          if (!cancelled && !abortRef.current && data?.image_url) {
+            setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+          }
+
+          if (error || data?.error) {
+            console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+          }
+          break;
+        } catch (err) {
+          console.warn("Image generation error for", dish.dish, err);
+          break;
         }
       }
+
+      setActiveGenerations(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    };
+
+    const generateWithConcurrency = async () => {
+      const queue = [...dishesNeedingImages];
+      const running: Promise<void>[] = [];
+
+      while (queue.length > 0 && !cancelled && !abortRef.current) {
+        while (running.length < CONCURRENCY && queue.length > 0) {
+          const item = queue.shift()!;
+          const promise = generateOne(item.dish, item.index).then(() => {
+            running.splice(running.indexOf(promise), 1);
+          });
+          running.push(promise);
+        }
+        if (running.length > 0) {
+          await Promise.race(running);
+        }
+      }
+      await Promise.all(running);
       setImageLoadingIndex(null);
     };
 
-    generateSequentially();
+    generateWithConcurrency();
 
     return () => {
       cancelled = true;
