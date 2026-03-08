@@ -106,7 +106,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       setImageLoadingIndex(null);
     };
 
-    generateWithConcurrency();
+    generateSequentially();
 
     return () => {
       cancelled = true;
