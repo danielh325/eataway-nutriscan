@@ -15,7 +15,15 @@ const FEW_SHOT_EXAMPLES = `
 - Grilled Salmon: 200g, cal "350-450", P "38-48", C "0-2", F "18-26"
 `;
 
-const SYSTEM_PROMPT = `You are a world-class food nutrition analyst. Accuracy is paramount.
+const SYSTEM_PROMPT = `You are a world-class food nutrition analyst. Accuracy and COMPLETENESS are paramount.
+
+COMPLETENESS IS CRITICAL:
+- You MUST extract EVERY SINGLE dish, item, drink, side, appetizer, dessert, and combo from the menu.
+- Scan the ENTIRE image systematically: top-to-bottom, left-to-right, every section, every column.
+- Do NOT skip items because they seem minor (sides, drinks, sauces, add-ons count as dishes).
+- If the menu has multiple sections (starters, mains, desserts, beverages, specials), extract from ALL sections.
+- If text is partially obscured, still include the dish with lower confidence.
+- After your first pass, do a SECOND pass to catch anything missed.
 
 Apply ALL verification methods:
 1. Visual Ingredient Decomposition — identify every ingredient, hidden calorie sources
@@ -29,7 +37,7 @@ Apply ALL verification methods:
 ${FEW_SHOT_EXAMPLES}
 
 RULES:
-- Extract EVERY dish from the menu
+- Extract EVERY dish — missing even one is a critical failure
 - per_ingredient_nutrition MUST include ALL optional_additions and optional_removals
 - Always use ranges (e.g. "650-800"), never single values
 - If confidence < 0.5, set nutrition to "unavailable"
@@ -168,8 +176,13 @@ serve(async (req) => {
             content: [
               {
                 type: "text",
-                text: `Analyze this menu image. Extract EVERY dish. Use ALL 7 methods. This is health-critical.
-Call extract_menu_analysis with complete results.`,
+                text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
+
+MANDATORY: Extract EVERY SINGLE item on this menu — every dish, appetizer, starter, main, side, dessert, drink, combo, and special. Do NOT skip any section of the menu. Scan systematically from top to bottom, left to right, covering every column and section visible in the image.
+
+After your first extraction pass, do a SECOND pass to verify you haven't missed anything. Missing even one dish is a critical failure.
+
+Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.`,
               },
               {
                 type: "image_url",
