@@ -58,12 +58,14 @@ Apply ALL methods in parallel and cross-reference:
 - Use dish name etymology to infer preparation method when ambiguous
 
 ## CRITICAL RULES
-1. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
-2. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
-3. If confidence < 0.5, set nutrition to "unavailable" string
-4. Include recipe reconstruction for every dish
-5. Include verification_notes explaining cross-referencing logic
-6. Nutrition ranges must be strings like "650-800", never numbers`;
+1. Extract EVERY SINGLE dish from the menu — scan ALL sections, categories, pages. Do not skip any item.
+2. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
+3. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
+4. If confidence < 0.5, set nutrition to "unavailable" string
+5. Include recipe reconstruction for every dish
+6. Include verification_notes explaining cross-referencing logic
+7. Nutrition ranges must be strings like "650-800", never numbers
+8. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish`;
 
 // Tool calling schema for structured output
 const EXTRACT_MENU_TOOL = {
