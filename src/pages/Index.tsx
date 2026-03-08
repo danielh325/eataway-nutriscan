@@ -23,6 +23,8 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<DishData[] | null>(null);
   const [restaurantContext, setRestaurantContext] = useState<RestaurantContextData | null>(null);
+  const [menuImageBase64, setMenuImageBase64] = useState<string | undefined>();
+  const [menuMimeType, setMenuMimeType] = useState<string | undefined>();
   const [showDailyLog, setShowDailyLog] = useState(false);
   const { toast } = useToast();
   const { user, loading: authLoading, signOut } = useAuth();
