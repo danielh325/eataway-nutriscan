@@ -5,7 +5,7 @@ import { AnalysisSkeleton } from "@/components/LoadingSkeleton";
 import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
 import { Sparkles, Shield, Database, LogIn, LogOut, BookOpen } from "lucide-react";
-import { analyzeMenu } from "@/lib/api/menu";
+import { analyzeMenu, refineMenu } from "@/lib/api/menu";
 import eatawayLogo from "@/assets/eataway-logo.png";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,6 +21,7 @@ interface RestaurantContextData {
 
 const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [results, setResults] = useState<DishData[] | null>(null);
   const [restaurantContext, setRestaurantContext] = useState<RestaurantContextData | null>(null);
   const [menuImageBase64, setMenuImageBase64] = useState<string | undefined>();
@@ -31,6 +32,7 @@ const Index = () => {
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
+    setIsRefining(false);
     setShowDailyLog(false);
     
     const response = await analyzeMenu(file);
@@ -43,18 +45,61 @@ const Index = () => {
       });
       setResults(null);
       setRestaurantContext(null);
-    } else if (response.dishes) {
+      setIsProcessing(false);
+      return;
+    }
+
+    if (response.dishes) {
+      // Show results immediately
       setResults(response.dishes);
       setRestaurantContext(response.restaurant_context || null);
       setMenuImageBase64(response.imageBase64);
       setMenuMimeType(response.mimeType);
+      setIsProcessing(false);
+
       toast({
         title: "Menu Analyzed",
-        description: `Found ${response.dishes.length} dishes`,
+        description: `Found ${response.dishes.length} dishes — refining accuracy…`,
       });
+
+      // Background refinement with GPT-5 + verification
+      setIsRefining(true);
+      const refined = await refineMenu(
+        response.dishes,
+        response.restaurant_context || null,
+        response.imageBase64,
+        response.mimeType
+      );
+
+      if (refined.dishes && refined.dishes.length > 0) {
+        // Merge refined nutrition back, preserving all other fields from original
+        setResults(prev => {
+          if (!prev) return refined.dishes!;
+          return prev.map(original => {
+            const match = refined.dishes!.find(
+              r => r.dish?.toLowerCase() === original.dish?.toLowerCase()
+            );
+            if (!match) return original;
+            return {
+              ...original,
+              nutrition: match.nutrition || original.nutrition,
+              confidence: match.confidence || original.confidence,
+              confidence_score: match.confidence_score ?? original.confidence_score,
+              data_sources: match.data_sources || original.data_sources,
+              verification_notes: match.verification_notes || original.verification_notes,
+            };
+          });
+        });
+
+        toast({
+          title: "Accuracy Refined",
+          description: "Ensemble verification complete — nutrition updated",
+        });
+      }
+      setIsRefining(false);
+    } else {
+      setIsProcessing(false);
     }
-    
-    setIsProcessing(false);
   };
 
   const handleReset = () => {
@@ -63,6 +108,7 @@ const Index = () => {
     setMenuImageBase64(undefined);
     setMenuMimeType(undefined);
     setShowDailyLog(false);
+    setIsRefining(false);
   };
 
   const handleSignIn = async () => {
@@ -208,7 +254,15 @@ const Index = () => {
             </div>
           </div>
         ) : (
-          <ResultsPanel dishes={results} restaurantContext={restaurantContext} onSaveDish={handleSaveDish} isLoggedIn={!!user} menuImageBase64={menuImageBase64} menuMimeType={menuMimeType} />
+          <ResultsPanel
+            dishes={results}
+            restaurantContext={restaurantContext}
+            onSaveDish={handleSaveDish}
+            isLoggedIn={!!user}
+            menuImageBase64={menuImageBase64}
+            menuMimeType={menuMimeType}
+            isRefining={isRefining}
+          />
         )}
       </main>
 
