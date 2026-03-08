@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck } from "lucide-react";
-import { useState, useMemo } from "react";
+import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { PortionSlider } from "./PortionSlider";
 import { IngredientToggles } from "./IngredientToggles";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PerIngredientNutrition {
   calories_kcal: number;
@@ -30,6 +31,8 @@ export interface DishData {
   portion_size_g?: number;
   recipe?: DishRecipe;
   verification_notes?: string;
+  has_image_in_menu?: boolean;
+  dish_image_url?: string;
   nutrition: {
     calories_kcal: string;
     protein_g: string;
@@ -81,9 +84,33 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
   const [addedIngredients, setAddedIngredients] = useState<Set<string>>(new Set());
+  const [generatedImage, setGeneratedImage] = useState<string | null>(dish.dish_image_url || null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const hasNutrition = dish.nutrition !== "unavailable";
   const isLowConfidence = dish.confidence === "low";
 
+  // Generate image when card first renders if dish has no menu image
+  useEffect(() => {
+    if (!dish.has_image_in_menu && !generatedImage && !imageLoading && !imageError) {
+      setImageLoading(true);
+      supabase.functions.invoke("generate-dish-image", {
+        body: {
+          dish_name: dish.dish,
+          cooking_method: dish.cooking_method,
+          ingredients: dish.ingredients_detected?.slice(0, 5),
+        },
+      }).then(({ data, error }) => {
+        if (error || data?.error) {
+          console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+          setImageError(true);
+        } else if (data?.image_url) {
+          setGeneratedImage(data.image_url);
+        }
+        setImageLoading(false);
+      });
+    }
+  }, [dish.dish]);
   const adjustedNutrition = useMemo(() => {
     if (!hasNutrition || dish.nutrition === "unavailable") return null;
 
@@ -159,6 +186,25 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => 
         <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 text-destructive text-xs font-mono">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>LOW CONFIDENCE — MANUAL REVIEW RECOMMENDED</span>
+        </div>
+      )}
+
+      {/* Dish Image */}
+      {generatedImage && (
+        <div className="w-full h-40 md:h-48 overflow-hidden">
+          <img
+            src={generatedImage}
+            alt={dish.dish}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      {imageLoading && (
+        <div className="w-full h-40 md:h-48 bg-secondary flex items-center justify-center">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-xs font-mono">Generating image…</span>
+          </div>
         </div>
       )}
 

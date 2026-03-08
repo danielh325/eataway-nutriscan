@@ -58,12 +58,14 @@ Apply ALL methods in parallel and cross-reference:
 - Use dish name etymology to infer preparation method when ambiguous
 
 ## CRITICAL RULES
-1. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
-2. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
-3. If confidence < 0.5, set nutrition to "unavailable" string
-4. Include recipe reconstruction for every dish
-5. Include verification_notes explaining cross-referencing logic
-6. Nutrition ranges must be strings like "650-800", never numbers`;
+1. Extract EVERY SINGLE dish from the menu — scan ALL sections, categories, pages. Do not skip any item.
+2. per_ingredient_nutrition MUST include entries for ALL items in optional_additions and optional_removals using the SAME exact names
+3. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
+4. If confidence < 0.5, set nutrition to "unavailable" string
+5. Include recipe reconstruction for every dish
+6. Include verification_notes explaining cross-referencing logic
+7. Nutrition ranges must be strings like "650-800", never numbers
+8. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish`;
 
 // Tool calling schema for structured output
 const EXTRACT_MENU_TOOL = {
@@ -133,11 +135,12 @@ const EXTRACT_MENU_TOOL = {
                   required: ["calories_kcal", "protein_g", "carbs_g", "fat_g"],
                 },
               },
+              has_image_in_menu: { type: "boolean", description: "Whether the menu image contains a photo of this specific dish" },
               verification_notes: { type: "string", description: "Cross-referencing logic and data sources used" },
               data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
               notes: { type: "string", description: "Additional notes about the dish" },
             },
-            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "verification_notes", "data_sources"],
+            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "has_image_in_menu", "verification_notes", "data_sources"],
           },
         },
       },
@@ -190,13 +193,16 @@ serve(async (req) => {
                 type: "text",
                 text: `Analyze this menu image using ALL 7 methods (VID, RR, DCR, CC, SCOD, CLAM, CF). This is health-critical.
 
+CRITICAL: Extract EVERY SINGLE dish/item from the menu. Scan ALL sections, categories, and pages visible. Do NOT skip any item.
+
 STEP 1: Identify restaurant context.
-STEP 2: Extract every dish. Reconstruct FULL RECIPE with specific quantities.
+STEP 2: Extract EVERY dish. Reconstruct FULL RECIPE with specific quantities.
 STEP 3: Calculate nutrition using ALL methods. Cross-reference USDA data. Use RANGES.
 STEP 4: Apply cooking loss & absorption modeling.
 STEP 5: Use culinary fingerprinting for dish identification.
 STEP 6: Run sanity checks — verify macro-to-calorie ratios.
 STEP 7: Assign confidence scores (0.0-1.0).
+STEP 8: For each dish, determine if the menu image contains a photograph of that dish (set has_image_in_menu accordingly).
 
 Include per_ingredient_nutrition for ALL optional_additions, optional_removals, and top default ingredients.
 Call extract_menu_analysis with the complete results.`,
