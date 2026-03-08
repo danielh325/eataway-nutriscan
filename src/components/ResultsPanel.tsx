@@ -3,7 +3,6 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractMenuImages, MenuImageMatch } from "@/lib/api/menu";
 
 interface RestaurantContextData {
   type?: string;
@@ -27,89 +26,73 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const availableNutrition = dishes.filter((d) => d.nutrition !== "unavailable").length;
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
 
-  // Image state
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
-  const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
   const abortRef = useRef(false);
   const [activeGenerations, setActiveGenerations] = useState<Set<number>>(new Set());
-  const [extractingMenuImages, setExtractingMenuImages] = useState(false);
-  const [menuExtractedImages, setMenuExtractedImages] = useState<Record<number, string>>({});
 
-  // Use dish names as stable key to avoid restarting image generation on refinement
   const dishKey = dishes.map(d => d.dish).join("|");
 
   useEffect(() => {
     abortRef.current = false;
     let cancelled = false;
 
-    const processImages = async () => {
-      // Step 1: Try to extract real food images from the menu photo
-      const matchedIndices = new Set<number>();
-
-      if (menuImageBase64 && menuMimeType) {
-        setExtractingMenuImages(true);
-        const dishNames = dishes.map(d => d.dish);
-
-        try {
-          const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
-          console.log(`Extracted ${matches.length} real food images from menu`);
-
-          for (const match of matches) {
-            if (cancelled || abortRef.current) break;
-            // Find the dish index that matches
-            const dishIndex = dishes.findIndex(
-              d => d.dish.toLowerCase() === match.dish_name.toLowerCase()
-            );
-            if (dishIndex !== -1 && match.image_url) {
-              matchedIndices.add(dishIndex);
-              setMenuExtractedImages(prev => ({ ...prev, [dishIndex]: match.image_url }));
-              // Also mark as having a real image
-              setGeneratedImages(prev => ({ ...prev, [dishIndex]: match.image_url }));
-            }
-          }
-        } catch (err) {
-          console.warn("Menu image extraction failed, falling back to AI generation:", err);
-        }
-        setExtractingMenuImages(false);
-      }
-
-      if (cancelled || abortRef.current) return;
-
-      // Step 2: Only generate AI images for dishes without any image (limit to first 3 to save time)
+    const generateAllImages = async () => {
       const dishesNeedingImages = dishes
         .map((d, i) => ({ dish: d, index: i }))
-        .filter(({ dish, index }) =>
-          !matchedIndices.has(index) &&
-          !dish.dish_image_url
-        )
-        .slice(0, 3); // Cap at 3 to avoid long waits and rate limits
+        .filter(({ dish }) => !dish.dish_image_url);
 
       if (dishesNeedingImages.length === 0) return;
-
-      console.log(`Generating AI images for ${dishesNeedingImages.length} dishes (${dishes.length - matchedIndices.size - dishesNeedingImages.length} skipped)`);
 
       for (const { dish, index } of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
         setActiveGenerations(prev => new Set(prev).add(index));
 
-        try {
-          const { data, error } = await supabase.functions.invoke("generate-dish-image", {
-            body: {
-              dish_name: dish.dish,
-              cooking_method: dish.cooking_method,
-              ingredients: dish.ingredients_detected?.slice(0, 5),
-            },
-          });
+        let retries = 0;
+        const maxRetries = 8;
+        let success = false;
 
-          if (!cancelled && !abortRef.current && data?.image_url) {
-            setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
-          } else if (data?.error === "Rate limit exceeded" || error) {
-            console.warn("Image generation skipped for", dish.dish, "- rate limited or error");
-            // Stop generating more if rate limited
-            if (data?.error === "Rate limit exceeded") break;
+        while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
+          try {
+            const { data, error } = await supabase.functions.invoke("generate-dish-image", {
+              body: {
+                dish_name: dish.dish,
+                cooking_method: dish.cooking_method,
+                ingredients: dish.ingredients_detected?.slice(0, 5),
+              },
+            });
+
+            const isRateLimited =
+              data?.error === "Rate limit exceeded" ||
+              error?.message?.includes("429") ||
+              error?.status === 429;
+
+            if (isRateLimited) {
+              retries++;
+              const delay = 3000 * Math.pow(2, retries - 1);
+              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+
+            if (!cancelled && !abortRef.current && data?.image_url) {
+              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+              success = true;
+            } else if (error || data?.error) {
+              console.warn("Image generation failed for", dish.dish, data?.error || error);
+            }
+            break;
+          } catch (err: any) {
+            const msg = JSON.stringify(err) + (err?.message || "");
+            if (msg.includes("429") || msg.includes("Rate limit") || msg.includes("rate limit")) {
+              retries++;
+              const delay = 3000 * Math.pow(2, retries - 1);
+              console.warn(`Rate limited (catch) for ${dish.dish}, retry ${retries}/${maxRetries}`);
+              await new Promise(r => setTimeout(r, delay));
+              continue;
+            }
+            console.warn("Image generation error for", dish.dish);
+            break;
           }
-        } catch (err) {
-          console.warn("Image generation error for", dish.dish);
         }
 
         setActiveGenerations(prev => {
@@ -118,20 +101,20 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
           return next;
         });
 
-        // Delay between generations
+        // Delay between dishes to reduce rate limits
         if (!cancelled && !abortRef.current) {
           await new Promise(r => setTimeout(r, 1500));
         }
       }
     };
 
-    processImages();
+    generateAllImages();
 
     return () => {
       cancelled = true;
       abortRef.current = true;
     };
-  }, [dishKey, menuImageBase64, menuMimeType]);
+  }, [dishKey]);
 
   return (
     <div className="animate-fade-in">
