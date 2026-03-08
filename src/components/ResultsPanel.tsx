@@ -141,11 +141,6 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             </span>
           </div>
         </div>
-        {extractingMenuImages && (
-          <div className="pt-2 text-xs font-mono text-muted-foreground text-center animate-pulse">
-            Extracting food photos from menu…
-          </div>
-        )}
         {isRefining && (
           <div className="pt-2 text-xs font-mono text-primary text-center animate-pulse">
             ✦ Refining accuracy with ensemble verification…
@@ -163,8 +158,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               onSave={onSaveDish}
               isLoggedIn={isLoggedIn}
               externalImage={generatedImages[index]}
-              imageLoading={activeGenerations.has(index) || (extractingMenuImages && !generatedImages[index])}
-              imageQueued={!dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && (activeGenerations.size > 0 || extractingMenuImages)}
+              imageLoading={activeGenerations.has(index)}
+              imageQueued={!dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && activeGenerations.size > 0}
             />
           </div>
         ))}
