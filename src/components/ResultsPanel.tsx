@@ -195,6 +195,11 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             Extracting food photos from menu…
           </div>
         )}
+        {isRefining && (
+          <div className="pt-2 text-xs font-mono text-primary text-center animate-pulse">
+            ✦ Refining accuracy with ensemble verification…
+          </div>
+        )}
       </div>
 
       {/* Responsive masonry-like grid */}
