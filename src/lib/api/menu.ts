@@ -55,6 +55,38 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
   }
 }
 
+export async function refineMenu(
+  dishes: DishData[],
+  restaurantContext: RestaurantContextData | null,
+  imageBase64?: string,
+  mimeType?: string
+): Promise<{ dishes?: DishData[]; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("refine-menu", {
+      body: {
+        dishes,
+        restaurant_context: restaurantContext,
+        imageBase64,
+        mimeType,
+      },
+    });
+
+    if (error) {
+      console.warn("Refinement error:", error);
+      return { error: error.message || "Refinement failed" };
+    }
+
+    if (data?.error) {
+      return { error: data.error };
+    }
+
+    return { dishes: data?.dishes };
+  } catch (err) {
+    console.warn("Refinement failed:", err);
+    return { error: err instanceof Error ? err.message : "Refinement failed" };
+  }
+}
+
 export async function extractMenuImages(
   imageBase64: string,
   mimeType: string,
