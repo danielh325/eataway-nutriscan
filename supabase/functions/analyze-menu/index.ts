@@ -63,9 +63,9 @@ Apply ALL methods in parallel and cross-reference:
 3. NEVER guess single-value numbers — always use ranges (min-max as string like "650-800")
 4. If confidence < 0.5, set nutrition to "unavailable" string
 5. Include recipe reconstruction for every dish
-6. Include verification_notes explaining cross-referencing logic
-7. Nutrition ranges must be strings like "650-800", never numbers
-8. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish`;
+6. Nutrition ranges must be strings like "650-800", never numbers
+7. Set has_image_in_menu to true ONLY if the menu image contains a photo of that specific dish
+8. Detect ALL allergens for each dish — cross-reference EVERY ingredient against all 14 major allergens plus common sensitivities`;
 
 // Tool calling schema for structured output
 const EXTRACT_MENU_TOOL = {
