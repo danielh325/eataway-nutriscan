@@ -5,7 +5,7 @@ import { NutritionBar } from "./NutritionBar";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { PortionSlider } from "./PortionSlider";
 import { IngredientToggles } from "./IngredientToggles";
-import { supabase } from "@/integrations/supabase/client";
+
 
 export interface PerIngredientNutrition {
   calories_kcal: number;
