@@ -1,11 +1,11 @@
 import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { PortionSlider } from "./PortionSlider";
 import { IngredientToggles } from "./IngredientToggles";
-import { supabase } from "@/integrations/supabase/client";
+
 
 export interface PerIngredientNutrition {
   calories_kcal: number;
@@ -53,6 +53,8 @@ interface DishCardProps {
   index: number;
   onSave?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
   isLoggedIn?: boolean;
+  externalImage?: string;
+  imageLoading?: boolean;
 }
 
 const parseRangeMid = (value: string): number => {
@@ -62,16 +64,12 @@ const parseRangeMid = (value: string): number => {
   if (dashParts.length === 2 && !isNaN(dashParts[0]) && !isNaN(dashParts[1])) return (dashParts[0] + dashParts[1]) / 2;
   return parseFloat(value) || 0;
 };
-
 const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngredientNutrition>): PerIngredientNutrition | null => {
   const lower = name.toLowerCase();
-  // Exact match first
   if (perIngr[name]) return perIngr[name];
-  // Case-insensitive match
   for (const key of Object.keys(perIngr)) {
     if (key.toLowerCase() === lower) return perIngr[key];
   }
-  // Partial match (e.g., "cheese" matches "cheddar cheese", "extra cheese" matches "cheese")
   for (const key of Object.keys(perIngr)) {
     const keyLower = key.toLowerCase();
     if (keyLower.includes(lower) || lower.includes(keyLower)) return perIngr[key];
@@ -79,38 +77,15 @@ const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngred
   return null;
 };
 
-export const DishCard = ({ dish, index, onSave, isLoggedIn }: DishCardProps) => {
+export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageLoading: externalImageLoading }: DishCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
   const [addedIngredients, setAddedIngredients] = useState<Set<string>>(new Set());
-  const [generatedImage, setGeneratedImage] = useState<string | null>(dish.dish_image_url || null);
-  const [imageLoading, setImageLoading] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const generatedImage = externalImage || dish.dish_image_url || null;
+  const imageLoading = externalImageLoading || false;
   const hasNutrition = dish.nutrition !== "unavailable";
   const isLowConfidence = dish.confidence === "low";
-
-  // Generate image when card first renders if dish has no menu image
-  useEffect(() => {
-    if (!dish.has_image_in_menu && !generatedImage && !imageLoading && !imageError) {
-      setImageLoading(true);
-      supabase.functions.invoke("generate-dish-image", {
-        body: {
-          dish_name: dish.dish,
-          cooking_method: dish.cooking_method,
-          ingredients: dish.ingredients_detected?.slice(0, 5),
-        },
-      }).then(({ data, error }) => {
-        if (error || data?.error) {
-          console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
-          setImageError(true);
-        } else if (data?.image_url) {
-          setGeneratedImage(data.image_url);
-        }
-        setImageLoading(false);
-      });
-    }
-  }, [dish.dish]);
   const adjustedNutrition = useMemo(() => {
     if (!hasNutrition || dish.nutrition === "unavailable") return null;
 

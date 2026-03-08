@@ -1,6 +1,8 @@
+import { useState, useEffect, useRef } from "react";
 import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RestaurantContextData {
   type?: string;
@@ -20,6 +22,63 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const totalDishes = dishes.length;
   const availableNutrition = dishes.filter((d) => d.nutrition !== "unavailable").length;
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
+
+  // Sequential image generation to avoid rate limits
+  const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
+  const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
+  const abortRef = useRef(false);
+
+  useEffect(() => {
+    abortRef.current = false;
+    const dishesNeedingImages = dishes
+      .map((d, i) => ({ dish: d, index: i }))
+      .filter(({ dish }) => !dish.has_image_in_menu && !dish.dish_image_url);
+
+    if (dishesNeedingImages.length === 0) return;
+
+    let cancelled = false;
+
+    const generateSequentially = async () => {
+      for (const { dish, index } of dishesNeedingImages) {
+        if (cancelled || abortRef.current) break;
+
+        setImageLoadingIndex(index);
+
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-dish-image", {
+            body: {
+              dish_name: dish.dish,
+              cooking_method: dish.cooking_method,
+              ingredients: dish.ingredients_detected?.slice(0, 5),
+            },
+          });
+
+          if (!cancelled && !abortRef.current && data?.image_url) {
+            setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+          }
+
+          if (error || data?.error) {
+            console.warn("Image generation failed for", dish.dish, error?.message || data?.error);
+          }
+        } catch (err) {
+          console.warn("Image generation error for", dish.dish, err);
+        }
+
+        // Small delay between requests to avoid rate limits
+        if (!cancelled && !abortRef.current) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+      setImageLoadingIndex(null);
+    };
+
+    generateSequentially();
+
+    return () => {
+      cancelled = true;
+      abortRef.current = true;
+    };
+  }, [dishes]);
 
   return (
     <div className="animate-fade-in">
@@ -52,7 +111,14 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       <div className="columns-1 md:columns-2 xl:columns-3 gap-4 space-y-4">
         {dishes.map((dish, index) => (
           <div key={index} className="break-inside-avoid">
-            <DishCard dish={dish} index={index} onSave={onSaveDish} isLoggedIn={isLoggedIn} />
+            <DishCard
+              dish={dish}
+              index={index}
+              onSave={onSaveDish}
+              isLoggedIn={isLoggedIn}
+              externalImage={generatedImages[index]}
+              imageLoading={imageLoadingIndex === index}
+            />
           </div>
         ))}
       </div>
