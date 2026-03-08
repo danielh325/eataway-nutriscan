@@ -19,6 +19,7 @@ interface ResultsPanelProps {
   isLoggedIn?: boolean;
   menuImageBase64?: string;
   menuMimeType?: string;
+  isRefining?: boolean;
 }
 
 export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn, menuImageBase64, menuMimeType }: ResultsPanelProps) => {
