@@ -97,11 +97,11 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b-2 border-foreground">
-        <div className="container max-w-4xl px-4 py-4 md:py-5">
+      <header className="border-b border-border/50 glass-panel sticky top-0 z-50">
+        <div className="container max-w-4xl px-4 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 md:w-10 md:h-10 bg-foreground text-primary-foreground rounded-xl flex items-center justify-center">
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center glow-primary">
                 <svg viewBox="0 0 24 24" className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M15 11h.01M11 15h.01M16 16c1-1.3 1.6-2.7 1.8-4.2C18 10.5 18 9.2 17.6 8c-.5-1.3-1.5-2.4-2.8-3.1C13.5 4.2 12 4 10.5 4.2 9 4.5 7.7 5.3 6.8 6.5 5.8 7.7 5.3 9.2 5.3 10.8c0 1.6.5 3.2 1.5 4.4" />
                   <path d="M9 18h6" />
@@ -115,7 +115,7 @@ const Index = () => {
               {user && (
                 <button
                   onClick={() => { setShowDailyLog(!showDailyLog); setResults(null); }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-xl hover:bg-secondary transition-colors"
                 >
                   <BookOpen className="w-3.5 h-3.5" />
                   <span className="hidden md:inline">Daily Log</span>
@@ -125,7 +125,7 @@ const Index = () => {
                 <button
                   onClick={handleReset}
                   disabled={isProcessing}
-                  className="px-3 py-2 text-xs md:text-sm font-medium border-2 border-foreground rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
+                  className="px-3 py-2 text-xs md:text-sm font-medium border border-primary/40 text-primary rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-50"
                 >
                   New Scan
                 </button>
@@ -134,7 +134,7 @@ const Index = () => {
                 user ? (
                   <button
                     onClick={signOut}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-xl hover:bg-secondary transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span className="hidden md:inline">Sign Out</span>
@@ -142,7 +142,7 @@ const Index = () => {
                 ) : (
                   <button
                     onClick={handleSignIn}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium bg-foreground text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity glow-primary"
                   >
                     <LogIn className="w-3.5 h-3.5" />
                     <span className="hidden md:inline">Sign In</span>
@@ -166,7 +166,7 @@ const Index = () => {
               <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
                 Photo to Nutrition
                 <br />
-                <span className="text-muted-foreground">in Seconds</span>
+                <span className="text-primary">in Seconds</span>
               </h2>
               <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
                 Upload a menu photo and get verified nutritional estimates for every dish.
@@ -179,8 +179,8 @@ const Index = () => {
 
             {/* Features */}
             <div className="grid md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-8">
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-xl border border-border hover:border-foreground transition-colors">
-                <Sparkles className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+                <Sparkles className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
                 <div>
                   <h3 className="font-medium mb-1 text-sm md:text-base">Multi-Step Pipeline</h3>
                   <p className="text-xs md:text-sm text-muted-foreground">
@@ -188,8 +188,8 @@ const Index = () => {
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-xl border border-border hover:border-foreground transition-colors">
-                <Database className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+                <Database className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
                 <div>
                   <h3 className="font-medium mb-1 text-sm md:text-base">Interactive Adjustments</h3>
                   <p className="text-xs md:text-sm text-muted-foreground">
@@ -197,8 +197,8 @@ const Index = () => {
                   </p>
                 </div>
               </div>
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-xl border border-border hover:border-foreground transition-colors">
-                <Shield className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+                <Shield className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
                 <div>
                   <h3 className="font-medium mb-1 text-sm md:text-base">Daily Health Log</h3>
                   <p className="text-xs md:text-sm text-muted-foreground">
@@ -214,7 +214,7 @@ const Index = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border mt-auto">
+      <footer className="border-t border-border/50 mt-auto">
         <div className="container max-w-4xl px-4 py-5 md:py-6">
           <p className="text-[10px] md:text-xs text-center text-muted-foreground font-mono">
             VERIFIED EXTRACTION PIPELINE • TRANSPARENCY {'>'} COMPLETENESS
