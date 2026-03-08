@@ -78,10 +78,10 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
       onDragLeave={() => setIsDragOver(false)}
       onDrop={handleDrop}
       className={cn(
-        "relative w-full border-2 border-dashed rounded-lg p-12 transition-all duration-300 cursor-pointer group",
+        "relative w-full border-2 border-dashed rounded-2xl p-12 transition-all duration-300 cursor-pointer group",
         isDragOver
-          ? "border-foreground bg-secondary"
-          : "border-muted-foreground/30 hover:border-foreground hover:bg-secondary/50"
+          ? "border-primary bg-primary/5"
+          : "border-muted-foreground/20 hover:border-primary/50 hover:bg-card"
       )}
     >
       <input
@@ -92,8 +92,8 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
       />
       <div className="flex flex-col items-center gap-6 text-center">
         <div className="relative">
-          <div className="w-20 h-20 rounded-full border-2 border-foreground flex items-center justify-center group-hover:bg-foreground group-hover:text-primary-foreground transition-colors">
-            <Upload className="w-8 h-8" />
+          <div className="w-20 h-20 rounded-2xl border border-primary/40 bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            <Upload className="w-8 h-8 text-primary group-hover:text-primary-foreground" />
           </div>
         </div>
         <div className="space-y-2">
