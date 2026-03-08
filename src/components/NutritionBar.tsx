@@ -10,8 +10,17 @@ interface NutritionBarProps {
 
 export const NutritionBar = ({ label, value, unit, max, color }: NutritionBarProps) => {
   const parseRange = (val: string) => {
-    const parts = val.split("–").map((v) => parseFloat(v.trim()));
-    return { min: parts[0], max: parts[1] || parts[0] };
+    // Handle both en-dash "–" and hyphen "-" range separators
+    const enDashParts = val.split("–").map((v) => parseFloat(v.trim()));
+    if (enDashParts.length === 2 && !isNaN(enDashParts[0]) && !isNaN(enDashParts[1])) {
+      return { min: enDashParts[0], max: enDashParts[1] };
+    }
+    const hyphenParts = val.split("-").map((v) => parseFloat(v.trim()));
+    if (hyphenParts.length === 2 && !isNaN(hyphenParts[0]) && !isNaN(hyphenParts[1])) {
+      return { min: hyphenParts[0], max: hyphenParts[1] };
+    }
+    const single = parseFloat(val) || 0;
+    return { min: single, max: single };
   };
 
   const range = parseRange(value);

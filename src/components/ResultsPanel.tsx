@@ -164,7 +164,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       cancelled = true;
       abortRef.current = true;
     };
-  }, [dishes, menuImageBase64, menuMimeType]);
+  }, [dishKey, menuImageBase64, menuMimeType]);
 
   return (
     <div className="animate-fade-in">

@@ -77,7 +77,9 @@ const Index = () => {
           if (!prev) return refined.dishes!;
           return prev.map(original => {
             const match = refined.dishes!.find(
-              r => r.dish?.toLowerCase() === original.dish?.toLowerCase()
+              r => r.dish?.toLowerCase().trim() === original.dish?.toLowerCase().trim() ||
+                   r.dish?.toLowerCase().includes(original.dish?.toLowerCase()) ||
+                   original.dish?.toLowerCase().includes(r.dish?.toLowerCase())
             );
             if (!match) return original;
             return {

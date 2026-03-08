@@ -106,10 +106,11 @@ export const DailyLog = () => {
   };
 
   const saveGoals = async () => {
+    if (!user) return;
     const { error } = await supabase
       .from("daily_goals")
       .update(tempGoals)
-      .eq("user_id", user!.id);
+      .eq("user_id", user.id);
     if (!error) {
       setGoals(tempGoals);
       setEditingGoals(false);

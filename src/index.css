@@ -109,6 +109,11 @@
     border: 1px solid hsla(220, 10%, 90%, 0.6);
   }
 
+  .dark .glass-panel {
+    background: hsla(220, 18%, 10%, 0.85);
+    border: 1px solid hsla(220, 12%, 16%, 0.6);
+  }
+
   .glow-primary {
     box-shadow: 0 0 20px -5px hsla(152, 60%, 36%, 0.25);
   }

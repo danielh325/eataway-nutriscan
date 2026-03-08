@@ -35,7 +35,15 @@ export const MenuUploader = ({ onImageUpload, isProcessing }: MenuUploaderProps)
     [onImageUpload]
   );
 
+  // Clean up object URL on unmount or when preview changes
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
   const clearPreview = () => {
+    if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
   };
 
