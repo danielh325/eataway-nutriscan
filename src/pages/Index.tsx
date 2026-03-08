@@ -6,7 +6,7 @@ import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
 import { Sparkles, Shield, Database, LogIn, LogOut, BookOpen } from "lucide-react";
 import { analyzeMenu } from "@/lib/api/menu";
-import eatawayLogo from "@/assets/eataway-logo.png";
+import eatawayLogo from "@/assets/eataway-logo.jpeg";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { lovable } from "@/integrations/lovable/index";
