@@ -46,6 +46,8 @@ const Index = () => {
     } else if (response.dishes) {
       setResults(response.dishes);
       setRestaurantContext(response.restaurant_context || null);
+      setMenuImageBase64(response.imageBase64);
+      setMenuMimeType(response.mimeType);
       toast({
         title: "Menu Analyzed",
         description: `Found ${response.dishes.length} dishes`,
