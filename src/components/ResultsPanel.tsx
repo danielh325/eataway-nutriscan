@@ -144,14 +144,12 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
         });
       };
 
-      // Process in parallel batches of 2 with short delay between batches
-      const BATCH_SIZE = 2;
-      for (let i = 0; i < dishesNeedingImages.length; i += BATCH_SIZE) {
+      // Process one at a time to avoid rate limits
+      for (const item of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
-        const batch = dishesNeedingImages.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(generateOne));
-        if (!cancelled && !abortRef.current && i + BATCH_SIZE < dishesNeedingImages.length) {
-          await new Promise(r => setTimeout(r, 800));
+        await generateOne(item);
+        if (!cancelled && !abortRef.current) {
+          await new Promise(r => setTimeout(r, 1500));
         }
       }
       setImageLoadingIndex(null);
