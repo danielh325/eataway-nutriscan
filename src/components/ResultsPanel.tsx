@@ -87,7 +87,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
         setActiveGenerations(prev => new Set(prev).add(index));
 
         let retries = 0;
-        const maxRetries = 4;
+        const maxRetries = 6;
         let success = false;
 
         while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
