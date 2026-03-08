@@ -436,7 +436,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
             {onSave && hasNutrition && adjustedNutrition && (
               <button
                 onClick={() => onSave(dish, adjustedNutrition.calories_kcal, adjustedNutrition.protein_g, adjustedNutrition.carbs_g, adjustedNutrition.fat_g, portionMultiplier)}
-                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-foreground text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                className="mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity glow-primary"
               >
                 <Save className="w-3.5 h-3.5" />
                 {isLoggedIn ? "Save to Daily Log" : "Sign in to Save"}
