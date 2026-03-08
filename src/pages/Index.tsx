@@ -60,6 +60,8 @@ const Index = () => {
   const handleReset = () => {
     setResults(null);
     setRestaurantContext(null);
+    setMenuImageBase64(undefined);
+    setMenuMimeType(undefined);
     setShowDailyLog(false);
   };
 
