@@ -108,7 +108,7 @@ const Index = () => {
         <div className="container max-w-4xl px-4 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src={eatawayLogo} alt="EatAway" className="h-9 md:h-10 w-auto" />
+              <img src={eatawayLogo} alt="EatAway" className="h-11 md:h-13 w-auto" />
             </div>
             <div className="flex items-center gap-2">
               {user && (
