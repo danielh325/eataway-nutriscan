@@ -37,12 +37,43 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
     abortRef.current = false;
     let cancelled = false;
 
-    const generateAllImages = async () => {
+    const run = async () => {
+      // Step 1: Try to extract real photos from the menu image
+      const menuMatches: Record<string, string> = {};
+      if (menuImageBase64 && menuMimeType) {
+        try {
+          const dishNames = dishes.map(d => d.dish);
+          const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
+          for (const m of matches) {
+            if (m.image_url && m.dish_name) {
+              menuMatches[m.dish_name.toLowerCase()] = m.image_url;
+            }
+          }
+          console.log(`Menu extraction found ${Object.keys(menuMatches).length} dish photos`);
+        } catch (err) {
+          console.warn("Menu image extraction failed, will generate all:", err);
+        }
+      }
+
+      // Apply menu-extracted images immediately
+      if (!cancelled && !abortRef.current) {
+        const extracted: Record<number, string> = {};
+        dishes.forEach((d, i) => {
+          const match = menuMatches[d.dish.toLowerCase()];
+          if (match) extracted[i] = match;
+        });
+        if (Object.keys(extracted).length > 0) {
+          setGeneratedImages(prev => ({ ...prev, ...extracted }));
+        }
+      }
+
+      // Step 2: AI-generate images ONLY for dishes that have no image
       const dishesNeedingImages = dishes
         .map((d, i) => ({ dish: d, index: i }))
-        .filter(({ dish }) => !dish.dish_image_url);
+        .filter(({ dish, index }) => !dish.dish_image_url && !menuMatches[dish.dish.toLowerCase()]);
 
       if (dishesNeedingImages.length === 0) return;
+      console.log(`Generating AI images for ${dishesNeedingImages.length} dishes without menu photos`);
 
       for (const { dish, index } of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
@@ -102,14 +133,13 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
           return next;
         });
 
-        // Delay between dishes to reduce rate limits
         if (!cancelled && !abortRef.current) {
           await new Promise(r => setTimeout(r, 1500));
         }
       }
     };
 
-    generateAllImages();
+    run();
 
     return () => {
       cancelled = true;
