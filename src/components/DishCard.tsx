@@ -375,7 +375,42 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
             </div>
           )}
 
-          {/* Data Sources, Verification & Notes */}
+          {/* Allergens */}
+          {dish.allergens && dish.allergens.length > 0 && (
+            <div className="p-4 md:p-5 border-b border-border">
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldAlert className="w-3.5 h-3.5 text-destructive" />
+                <p className="text-xs font-mono uppercase tracking-wider text-destructive">
+                  Allergens ({dish.allergens.length})
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {dish.allergens.map((allergen, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "px-2.5 py-1 text-xs rounded-full border font-medium",
+                      allergen.severity === "definite" && "bg-destructive/15 border-destructive/40 text-destructive",
+                      allergen.severity === "likely" && "bg-destructive/10 border-destructive/30 text-destructive/80",
+                      allergen.severity === "possible" && "bg-accent border-border text-accent-foreground",
+                      allergen.severity === "trace" && "bg-secondary border-border text-muted-foreground"
+                    )}
+                    title={`Source: ${allergen.source_ingredient} (${allergen.severity})`}
+                  >
+                    {allergen.name}
+                    <span className="ml-1 opacity-60 text-[10px]">
+                      {allergen.severity === "definite" ? "●" : allergen.severity === "likely" ? "◐" : allergen.severity === "possible" ? "○" : "·"}
+                    </span>
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2 font-mono">
+                ● definite · ◐ likely · ○ possible · · trace — hover for source
+              </p>
+            </div>
+          )}
+
+          {/* Data Sources & Save */}
           <div className="p-4 md:p-5 bg-secondary/30">
             {(dish.data_sources?.length ?? 0) > 0 && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
@@ -387,12 +422,6 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 <span>Confidence: {(dish.confidence_score * 100).toFixed(0)}%</span>
-              </div>
-            )}
-            {dish.verification_notes && (
-              <div className="flex items-start gap-2 text-xs text-muted-foreground mb-2">
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{dish.verification_notes}</span>
               </div>
             )}
             {dish.notes && (
