@@ -152,8 +152,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               onSave={onSaveDish}
               isLoggedIn={isLoggedIn}
               externalImage={generatedImages[index]}
-              imageLoading={imageLoadingIndex === index}
-              imageQueued={!dish.has_image_in_menu && !dish.dish_image_url && !generatedImages[index] && imageLoadingIndex !== index && imageLoadingIndex !== null}
+              imageLoading={activeGenerations.has(index)}
+              imageQueued={!dish.has_image_in_menu && !dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && activeGenerations.size > 0}
             />
           </div>
         ))}
