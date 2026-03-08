@@ -152,7 +152,7 @@ const EXTRACT_MENU_TOOL = {
               data_sources: { type: "array", items: { type: "string" }, description: "Databases referenced" },
               notes: { type: "string", description: "Additional notes about the dish" },
             },
-            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "has_image_in_menu", "verification_notes", "data_sources"],
+            required: ["dish", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
           },
         },
       },
