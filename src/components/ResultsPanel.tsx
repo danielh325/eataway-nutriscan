@@ -22,7 +22,7 @@ interface ResultsPanelProps {
   isRefining?: boolean;
 }
 
-export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn, menuImageBase64, menuMimeType }: ResultsPanelProps) => {
+export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn, menuImageBase64, menuMimeType, isRefining }: ResultsPanelProps) => {
   const totalDishes = dishes.length;
   const availableNutrition = dishes.filter((d) => d.nutrition !== "unavailable").length;
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
