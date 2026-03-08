@@ -81,14 +81,12 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
       if (dishesNeedingImages.length === 0) return;
 
-      const BATCH_SIZE = 3;
-
       const generateOne = async ({ dish, index }: { dish: DishData; index: number }) => {
         if (cancelled || abortRef.current) return;
         setActiveGenerations(prev => new Set(prev).add(index));
 
         let retries = 0;
-        const maxRetries = 3;
+        const maxRetries = 4;
         let success = false;
 
         while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
@@ -103,7 +101,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
             if (data?.error === "Rate limit exceeded") {
               retries++;
-              const delay = 2000 * Math.pow(2, retries - 1);
+              const delay = 3000 * Math.pow(2, retries - 1);
+              console.warn(`Rate limited for ${dish.dish}, retry ${retries} in ${delay}ms`);
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
@@ -121,7 +120,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             const msg = err?.message || err?.context?.body || "";
             if (typeof msg === "string" && msg.includes("Rate limit")) {
               retries++;
-              const delay = 2000 * Math.pow(2, retries - 1);
+              const delay = 3000 * Math.pow(2, retries - 1);
               await new Promise(r => setTimeout(r, delay));
               continue;
             }
@@ -137,11 +136,14 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
         });
       };
 
-      // Process in parallel batches
-      for (let i = 0; i < dishesNeedingImages.length; i += BATCH_SIZE) {
+      // Process sequentially with small delay to avoid rate limits
+      for (const item of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
-        const batch = dishesNeedingImages.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(generateOne));
+        await generateOne(item);
+        // Small delay between each request to avoid rate limiting
+        if (!cancelled && !abortRef.current) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
       setImageLoadingIndex(null);
     };
