@@ -76,77 +76,61 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       if (dishesNeedingImages.length === 0) return;
       console.log(`Generating AI images for ${dishesNeedingImages.length} dishes without menu photos`);
 
+      let consecutiveFailures = 0;
+
       for (const { dish, index } of dishesNeedingImages) {
         if (cancelled || abortRef.current) break;
+        // Stop all generation after 2 consecutive failures (likely rate limited or out of credits)
+        if (consecutiveFailures >= 2) {
+          console.warn("Too many consecutive failures — stopping image generation");
+          break;
+        }
         setActiveGenerations(prev => new Set(prev).add(index));
 
-        let retries = 0;
-        const maxRetries = 8;
-        let success = false;
-
-        while (retries < maxRetries && !cancelled && !abortRef.current && !success) {
-          try {
-            const { data, error } = await supabase.functions.invoke("generate-dish-image", {
-              body: {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-dish-image`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({
                 dish_name: dish.dish,
                 cooking_method: dish.cooking_method,
                 ingredients: dish.ingredients_detected?.slice(0, 5),
-              },
-            });
+              }),
+            }
+          );
 
-            // Parse error context from FunctionsHttpError
-            let errorBody: any = null;
-            if (error) {
-              try {
-                // error.context may contain the response; try to get JSON body
-                const ctx = (error as any).context;
-                if (ctx?.json) errorBody = await ctx.json().catch(() => null);
-                else if (ctx?.text) { const t = await ctx.text().catch(() => ""); try { errorBody = JSON.parse(t); } catch {} }
-              } catch {}
-            }
-
-            const errorMsg = data?.error || errorBody?.error || error?.message || "";
-
-            // Stop ALL generation if credits are exhausted (402)
-            if (errorMsg.includes("credits exhausted") || errorMsg.includes("402") || errorMsg.includes("Payment required")) {
-              console.warn("AI credits exhausted — stopping all image generation");
-              abortRef.current = true;
-              break;
-            }
-
-            // Rate limited
-            if (errorMsg.includes("Rate limit") || errorMsg.includes("rate limit") || errorMsg.includes("429")) {
-              retries++;
-              const delay = 3000 * Math.pow(2, retries - 1);
-              console.warn(`Rate limited for ${dish.dish}, retry ${retries}/${maxRetries} in ${delay}ms`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-
-            if (!cancelled && !abortRef.current && data?.image_url) {
-              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
-              success = true;
-            } else if (error || data?.error) {
-              console.warn("Image generation failed for", dish.dish, errorMsg);
-            }
-            break;
-          } catch (err: any) {
-            const msg = JSON.stringify(err) + (err?.message || "");
-            if (msg.includes("402") || msg.includes("credits")) {
-              console.warn("AI credits exhausted (catch) — stopping all image generation");
-              abortRef.current = true;
-              break;
-            }
-            if (msg.includes("429") || msg.includes("Rate limit") || msg.includes("rate limit")) {
-              retries++;
-              const delay = 3000 * Math.pow(2, retries - 1);
-              console.warn(`Rate limited (catch) for ${dish.dish}, retry ${retries}/${maxRetries}`);
-              await new Promise(r => setTimeout(r, delay));
-              continue;
-            }
-            console.warn("Image generation error for", dish.dish);
+          if (response.status === 402) {
+            console.warn("AI credits exhausted (402) — stopping all image generation");
+            abortRef.current = true;
             break;
           }
+
+          if (response.status === 429) {
+            console.warn(`Rate limited (429) for ${dish.dish} — skipping`);
+            consecutiveFailures++;
+            // Skip this dish, don't retry endlessly
+            continue;
+          }
+
+          if (response.ok) {
+            const data = await response.json();
+            if (!cancelled && !abortRef.current && data?.image_url) {
+              setGeneratedImages(prev => ({ ...prev, [index]: data.image_url }));
+              consecutiveFailures = 0; // reset on success
+            }
+          } else {
+            console.warn("Image generation failed for", dish.dish, response.status);
+            consecutiveFailures++;
+          }
+        } catch (err) {
+          console.warn("Image generation error for", dish.dish, err);
+          consecutiveFailures++;
         }
 
         setActiveGenerations(prev => {
