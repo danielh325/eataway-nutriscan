@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
+import Explore from "./pages/Explore";
 import NotFound from "./pages/NotFound";
+import { AppShell } from "./components/AppShell";
 
 const queryClient = new QueryClient();
 
@@ -17,7 +19,10 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route element={<AppShell />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/explore" element={<Explore />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
