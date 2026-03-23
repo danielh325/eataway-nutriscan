@@ -4,12 +4,10 @@ import { ResultsPanel } from "@/components/ResultsPanel";
 import { AnalysisSkeleton } from "@/components/LoadingSkeleton";
 import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
-import { Sparkles, Shield, Database, LogIn, LogOut, BookOpen } from "lucide-react";
+import { Sparkles, Shield, Database, BookOpen } from "lucide-react";
 import { analyzeMenu, refineMenu } from "@/lib/api/menu";
-import eatawayLogo from "@/assets/eataway-logo.png";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 
 interface RestaurantContextData {
@@ -28,7 +26,7 @@ const Index = () => {
   const [menuMimeType, setMenuMimeType] = useState<string | undefined>();
   const [showDailyLog, setShowDailyLog] = useState(false);
   const { toast } = useToast();
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user } = useAuth();
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
@@ -50,7 +48,6 @@ const Index = () => {
     }
 
     if (response.dishes) {
-      // Show results immediately
       setResults(response.dishes);
       setRestaurantContext(response.restaurant_context || null);
       setMenuImageBase64(response.imageBase64);
@@ -62,7 +59,6 @@ const Index = () => {
         description: `Found ${response.dishes.length} dishes — refining accuracy…`,
       });
 
-      // Background refinement with GPT-5 + verification
       setIsRefining(true);
       const refined = await refineMenu(
         response.dishes,
@@ -72,7 +68,6 @@ const Index = () => {
       );
 
       if (refined.dishes && refined.dishes.length > 0) {
-        // Merge refined nutrition back, preserving all other fields from original
         setResults(prev => {
           if (!prev) return refined.dishes!;
           return prev.map(original => {
@@ -113,15 +108,6 @@ const Index = () => {
     setIsRefining(false);
   };
 
-  const handleSignIn = async () => {
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (error) {
-      toast({ title: "Sign-in failed", description: error.message, variant: "destructive" });
-    }
-  };
-
   const handleSaveDish = async (dish: DishData, adjustedCalories: number, adjustedProtein: number, adjustedCarbs: number, adjustedFat: number, portionMultiplier: number) => {
     if (!user) {
       toast({ title: "Sign in to save", description: "Log in with Google to track your meals.", variant: "destructive" });
@@ -150,132 +136,90 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border/50 glass-panel sticky top-0 z-50">
-        <div className="container max-w-4xl px-4 py-3 md:py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <img src={eatawayLogo} alt="EatAway" className="h-11 md:h-13 w-auto" />
-            </div>
-            <div className="flex items-center gap-2">
-              {user && (
-                <button
-                  onClick={() => { setShowDailyLog(!showDailyLog); setResults(null); }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-xl hover:bg-secondary transition-colors"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Daily Log</span>
-                </button>
-              )}
-              {(results || isProcessing) && (
-                <button
-                  onClick={handleReset}
-                  disabled={isProcessing}
-                  className="px-3 py-2 text-xs md:text-sm font-medium border border-primary/40 text-primary rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-50"
-                >
-                  New Scan
-                </button>
-              )}
-              {!authLoading && (
-                user ? (
-                  <button
-                    onClick={signOut}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-xl hover:bg-secondary transition-colors"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Sign Out</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSignIn}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-opacity glow-primary"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Sign In</span>
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className={`container px-4 py-8 md:py-12 ${results ? 'max-w-7xl' : 'max-w-4xl'}`}>
-        {showDailyLog ? (
-          <DailyLog />
-        ) : isProcessing ? (
-          <AnalysisSkeleton />
-        ) : !results ? (
-          <div className="space-y-10 md:space-y-12">
-            {/* Hero Section */}
-            <div className="text-center space-y-4 animate-fade-in">
-              <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
-                Photo to Nutrition
-                <br />
-                <span className="text-primary">in Seconds</span>
-              </h2>
-              <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
-                Upload a menu photo and get verified nutritional estimates for every dish.
-                Adjust portions and ingredients in real-time.
-              </p>
-            </div>
-
-            {/* Upload Area */}
-            <MenuUploader onImageUpload={handleImageUpload} isProcessing={isProcessing} />
-
-            {/* Features */}
-            <div className="grid md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-8">
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
-                <Sparkles className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-medium mb-1 text-sm md:text-base">Multi-Step Pipeline</h3>
-                  <p className="text-xs md:text-sm text-muted-foreground">
-                    Context detection, ingredient decomposition, and visual portion calibration
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
-                <Database className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-medium mb-1 text-sm md:text-base">Interactive Adjustments</h3>
-                  <p className="text-xs md:text-sm text-muted-foreground">
-                    Portion sliders and ingredient toggles for real-time nutrition updates
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
-                <Shield className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
-                <div>
-                  <h3 className="font-medium mb-1 text-sm md:text-base">Daily Health Log</h3>
-                  <p className="text-xs md:text-sm text-muted-foreground">
-                    Track scans against personalized calorie, protein, carbs, and fat goals
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <ResultsPanel
-            dishes={results}
-            restaurantContext={restaurantContext}
-            onSaveDish={handleSaveDish}
-            isLoggedIn={!!user}
-            menuImageBase64={menuImageBase64}
-            menuMimeType={menuMimeType}
-            isRefining={isRefining}
-          />
+    <div className={results ? 'max-w-7xl mx-auto' : 'max-w-4xl mx-auto'}>
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2 mb-6">
+        {user && (
+          <button
+            onClick={() => { setShowDailyLog(!showDailyLog); setResults(null); }}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium border border-border rounded-xl hover:bg-secondary transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Daily Log</span>
+          </button>
         )}
-      </main>
+        {(results || isProcessing) && (
+          <button
+            onClick={handleReset}
+            disabled={isProcessing}
+            className="px-3 py-2 text-xs md:text-sm font-medium border border-primary/40 text-primary rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-50"
+          >
+            New Scan
+          </button>
+        )}
+      </div>
 
-      {/* Footer */}
-      <footer className="border-t border-border/50 mt-auto">
-        <div className="container max-w-4xl px-4 py-5 md:py-6">
-          <p className="text-[10px] md:text-xs text-center text-muted-foreground font-mono">
-            VERIFIED EXTRACTION PIPELINE • TRANSPARENCY {'>'} COMPLETENESS
-          </p>
+      {showDailyLog ? (
+        <DailyLog />
+      ) : isProcessing ? (
+        <AnalysisSkeleton />
+      ) : !results ? (
+        <div className="space-y-10 md:space-y-12">
+          <div className="text-center space-y-4 animate-fade-in">
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+              Photo to Nutrition
+              <br />
+              <span className="text-primary">in Seconds</span>
+            </h2>
+            <p className="text-base md:text-lg text-muted-foreground max-w-lg mx-auto">
+              Upload a menu photo and get verified nutritional estimates for every dish.
+              Adjust portions and ingredients in real-time.
+            </p>
+          </div>
+
+          <MenuUploader onImageUpload={handleImageUpload} isProcessing={isProcessing} />
+
+          <div className="grid md:grid-cols-3 gap-4 md:gap-6 pt-4 md:pt-8">
+            <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+              <Sparkles className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
+              <div>
+                <h3 className="font-medium mb-1 text-sm md:text-base">Multi-Step Pipeline</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  Context detection, ingredient decomposition, and visual portion calibration
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+              <Database className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
+              <div>
+                <h3 className="font-medium mb-1 text-sm md:text-base">Interactive Adjustments</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  Portion sliders and ingredient toggles for real-time nutrition updates
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 md:gap-4 p-4 md:p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors">
+              <Shield className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5 text-primary" />
+              <div>
+                <h3 className="font-medium mb-1 text-sm md:text-base">Daily Health Log</h3>
+                <p className="text-xs md:text-sm text-muted-foreground">
+                  Track scans against personalized calorie, protein, carbs, and fat goals
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </footer>
+      ) : (
+        <ResultsPanel
+          dishes={results}
+          restaurantContext={restaurantContext}
+          onSaveDish={handleSaveDish}
+          isLoggedIn={!!user}
+          menuImageBase64={menuImageBase64}
+          menuMimeType={menuMimeType}
+          isRefining={isRefining}
+        />
+      )}
     </div>
   );
 };
