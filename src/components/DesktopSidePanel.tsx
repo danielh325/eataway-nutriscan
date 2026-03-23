@@ -34,11 +34,20 @@ export default function DesktopSidePanel({
   onAddReview,
   onSearchClick,
 }: DesktopSidePanelProps) {
+  const navigate = useNavigate();
+
   return (
     <div className="absolute top-0 left-0 bottom-0 w-[420px] z-[1001] flex flex-col sheet-panel border-r border-[hsl(220_10%_90%)]">
       {/* Search bar — hidden when viewing spot detail */}
       {!selectedSpot && (
         <div className="px-4 pt-5 pb-3 flex items-center gap-2">
+          <button
+            onClick={() => navigate("/")}
+            className="w-[44px] h-[44px] rounded-full bg-[hsl(220,15%,95%)] flex items-center justify-center hover:bg-[hsl(220,15%,90%)] transition-colors shrink-0"
+            aria-label="Back to Scan"
+          >
+            <ScanLine className="h-[18px] w-[18px] text-[hsl(220,20%,15%)]" />
+          </button>
           <div
             className="flex-1 flex items-center h-[44px] rounded-full bg-[hsl(220,15%,95%)] pl-4 pr-4 cursor-pointer hover:bg-[hsl(220,15%,92%)] transition-colors"
             onClick={onSearchClick}
