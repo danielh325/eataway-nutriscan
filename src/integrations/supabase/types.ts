@@ -125,6 +125,36 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_suggestions: {
+        Row: {
+          address: string
+          created_at: string
+          cuisine: string | null
+          id: string
+          name: string
+          status: string
+          suggested_by: string | null
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          cuisine?: string | null
+          id?: string
+          name: string
+          status?: string
+          suggested_by?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          cuisine?: string | null
+          id?: string
+          name?: string
+          status?: string
+          suggested_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

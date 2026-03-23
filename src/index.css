@@ -118,3 +118,84 @@
     box-shadow: 0 0 20px -5px hsla(152, 60%, 36%, 0.25);
   }
 }
+
+/* Map markers */
+.map-marker-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+
+.marker-photo-wrapper {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  background: white;
+}
+
+.marker-photo-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.marker-label {
+  display: none;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: hsl(220, 20%, 15%);
+  text-shadow: 0 0 4px white, 0 0 4px white;
+  white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-marker-photo:hover .marker-photo-wrapper {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* User location blue dot */
+.user-location-marker {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.user-loc-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(210, 100%, 56%);
+  border: 3px solid white;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.user-loc-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(210, 100%, 56%);
+  opacity: 0.3;
+  z-index: 0;
+  animation: user-pulse 2s ease-out infinite;
+}
+
+@keyframes user-pulse {
+  0% { width: 16px; height: 16px; opacity: 0.3; }
+  100% { width: 50px; height: 50px; opacity: 0; }
+}
