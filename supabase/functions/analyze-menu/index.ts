@@ -44,6 +44,8 @@ RULES:
 - Detect ALL 14 major allergens per dish
 - Use calibration examples to anchor estimates`;
 
+const ANALYSIS_MODELS = ["google/gemini-3-flash-preview", "google/gemini-2.5-flash-lite"];
+
 const EXTRACT_MENU_TOOL = {
   type: "function",
   function: {
