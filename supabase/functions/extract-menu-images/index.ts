@@ -35,13 +35,44 @@ Return a JSON array of matches:
 
 ONLY return the JSON array, nothing else.`;
 
+async function safeJsonFromResponse(response: Response): Promise<any | null> {
+  const raw = await response.text();
+  if (!raw?.trim()) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("Failed to parse identify response JSON:", e, raw.slice(0, 300));
+    return null;
+  }
+}
+
+function extractContentText(content: any): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part: any) => (typeof part === "string" ? part : part?.text || "")).join("\n");
+  }
+  return "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { imageBase64, mimeType, dish_names } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      console.error("Failed to parse extract-menu-images request:", parseErr);
+      return new Response(
+        JSON.stringify({ matches: [], error: "Invalid request payload" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { imageBase64, mimeType, dish_names } = body;
 
     if (!imageBase64) {
       return new Response(
@@ -92,14 +123,28 @@ serve(async (req) => {
     if (!identifyResponse.ok) {
       const errText = await identifyResponse.text();
       console.error("Identify step failed:", identifyResponse.status, errText);
+
+      const errorMsg = identifyResponse.status === 402
+        ? "AI credits exhausted"
+        : identifyResponse.status === 429
+          ? "Rate limit exceeded"
+          : "Failed to identify food images";
+
       return new Response(
-        JSON.stringify({ matches: [], error: "Failed to identify food images" }),
+        JSON.stringify({ matches: [], error: errorMsg }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const identifyData = await identifyResponse.json();
-    const rawContent = identifyData.choices?.[0]?.message?.content || "[]";
+    const identifyData = await safeJsonFromResponse(identifyResponse);
+    if (!identifyData) {
+      return new Response(
+        JSON.stringify({ matches: [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const rawContent = extractContentText(identifyData.choices?.[0]?.message?.content) || "[]";
 
     let matches: any[] = [];
     try {
