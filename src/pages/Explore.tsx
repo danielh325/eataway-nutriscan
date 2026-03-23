@@ -17,6 +17,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Search, Navigation, ScanLine } from "lucide-react";
 
 const Explore = () => {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [goalCategory, setGoalCategory] = useState<GoalCategory>("All");
   const [selectedSpot, setSelectedSpot] = useState<FoodSpot | null>(null);
