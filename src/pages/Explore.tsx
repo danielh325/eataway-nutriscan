@@ -152,6 +152,13 @@ const Explore = () => {
                 style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)" }}
               >
                 <div className="mx-3 flex items-center gap-2">
+                  <button
+                    onClick={() => navigate("/")}
+                    className="w-[48px] h-[48px] rounded-full bg-white/95 backdrop-blur-xl shadow-[0_2px_16px_rgba(0,0,0,0.08)] flex items-center justify-center active:scale-95 transition-transform"
+                    aria-label="Back to Scan"
+                  >
+                    <ScanLine className="h-[20px] w-[20px] text-[hsl(220,20%,15%)]" />
+                  </button>
                   <div
                     className="flex-1 flex items-center h-[48px] rounded-full bg-white/95 backdrop-blur-xl shadow-[0_2px_16px_rgba(0,0,0,0.08)] pl-4 pr-2 cursor-pointer"
                     onClick={() => setShowSearch(true)}
