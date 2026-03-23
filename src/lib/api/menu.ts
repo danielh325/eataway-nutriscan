@@ -35,12 +35,17 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
     });
 
     if (error) {
-      console.error("Edge function error:", error);
-      return { error: error.message || "Failed to analyze menu" };
+      const message = await getInvokeErrorMessage(error, "Failed to analyze menu");
+      console.error("Edge function error:", message, error);
+      return { error: message };
     }
 
-    if (data.error) {
+    if (data?.error) {
       return { error: data.error };
+    }
+
+    if (!data || !Array.isArray(data.dishes)) {
+      return { error: "Analysis returned an invalid response" };
     }
 
     return {
@@ -72,8 +77,9 @@ export async function refineMenu(
     });
 
     if (error) {
-      console.warn("Refinement error:", error);
-      return { error: error.message || "Refinement failed" };
+      const message = await getInvokeErrorMessage(error, "Refinement failed");
+      console.warn("Refinement error:", message, error);
+      return { error: message };
     }
 
     if (data?.error) {
@@ -98,7 +104,8 @@ export async function extractMenuImages(
     });
 
     if (error) {
-      console.warn("Extract menu images error:", error);
+      const message = await getInvokeErrorMessage(error, "Extract image matching failed");
+      console.warn("Extract menu images error:", message, error);
       return [];
     }
 
@@ -120,4 +127,44 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+async function getInvokeErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const err = error as Record<string, unknown> | null;
+  const message = typeof err?.message === "string" ? err.message : fallback;
+
+  const context = err?.context as Response | undefined;
+  if (context) {
+    try {
+      const text = await context.clone().text();
+      if (text?.trim()) {
+        try {
+          const parsed = JSON.parse(text);
+          if (typeof parsed?.error === "string") return parsed.error;
+        } catch {
+          return text.slice(0, 240);
+        }
+      }
+    } catch {
+      // ignore context parsing failures
+    }
+
+    if (context.status === 402) {
+      return "AI credits are exhausted. Please add workspace usage credits.";
+    }
+
+    if (context.status === 429) {
+      return "Too many AI requests right now. Please retry in a moment.";
+    }
+  }
+
+  if (message.includes("402")) {
+    return "AI credits are exhausted. Please add workspace usage credits.";
+  }
+
+  if (message.includes("429")) {
+    return "Too many AI requests right now. Please retry in a moment.";
+  }
+
+  return message;
 }
