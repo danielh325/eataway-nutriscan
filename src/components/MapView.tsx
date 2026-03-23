@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHand
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { FoodSpot } from "@/data/types";
+import { getPlacesPhotoCache } from "@/hooks/usePlacesPhoto";
 
 const MAPBOX_TOKEN = "pk.eyJ1Ijoiam90aGFtbGltIiwiYSI6ImNtbGJzbXJzMzBxd2kzZm9yYnRvdDFuMHEifQ.XVBAE0qZM1ZoDM7QQZrjQQ";
 
@@ -51,7 +52,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   useEffect(() => { onSpotSelectRef.current = onSpotSelect; }, [onSpotSelect]);
   useEffect(() => { onBoundsChangeRef.current = onBoundsChange; }, [onBoundsChange]);
 
-  // Fire bounds to parent
   const emitBounds = useCallback(() => {
     const map = mapRef.current;
     if (!map || !onBoundsChangeRef.current || suppressBoundsRef.current) return;
@@ -62,7 +62,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     });
   }, []);
 
-  // Initialise map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -81,12 +80,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       renderWorldCopies: false,
     });
 
-    // Hide Mapbox logo
     const style = document.createElement("style");
     style.textContent = `.mapboxgl-ctrl-logo, .mapboxgl-ctrl-attrib { display: none !important; }`;
     containerRef.current.appendChild(style);
 
-    // Force light theme
     map.on("style.load", () => {
       try {
         (map as any).setConfigProperty("basemap", "theme", "default");
@@ -107,7 +104,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
     mapRef.current = map;
 
-    // User location blue dot + auto-zoom to user on first fix
     let watchId: number | null = null;
     const startWatch = () => {
       if (!navigator.geolocation) return;
@@ -135,7 +131,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           const headingEl = userMarkerRef.current.getElement().querySelector(".user-loc-heading") as HTMLElement;
           if (headingEl) headingEl.style.transform = `rotate(${rotation}deg)`;
 
-          // Auto-fly to user location on first fix
           if (!geolocatedRef.current) {
             geolocatedRef.current = true;
             map.flyTo({ center: [longitude, latitude], zoom: 14, duration: 800 });
@@ -149,7 +144,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     map.once("load", startWatch);
     if (map.loaded()) startWatch();
 
-    // Debounce bounds emission to avoid rapid recalculations
     let boundsTimer: ReturnType<typeof setTimeout>;
     const debouncedEmitBounds = () => {
       clearTimeout(boundsTimer);
@@ -170,8 +164,13 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     };
   }, []);
 
-  // Sync individual markers
+  // Photo cache for markers
+  const photoCacheRef = useRef<Map<string, string>>(new Map());
   const zoomHandlerRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    getPlacesPhotoCache().then((cache) => { photoCacheRef.current = cache; });
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -180,7 +179,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     const currentIds = new Set(spots.map((s) => s.id));
     const existing = markersRef.current;
 
-    // Remove stale markers
     existing.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
@@ -188,14 +186,14 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       }
     });
 
-    // Add new markers
     spots.forEach((spot) => {
       if (existing.has(spot.id)) return;
+      const photoUrl = photoCacheRef.current.get(spot.name) || spot.image;
       const el = document.createElement("div");
       el.className = "map-marker-photo";
       el.innerHTML = `
         <div class="marker-photo-wrapper">
-          <img src="${spot.image}" alt="${spot.name}" />
+          <img src="${photoUrl}" alt="${spot.name}" />
         </div>
         <span class="marker-label">${spot.name}</span>
       `;
@@ -206,7 +204,6 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       existing.set(spot.id, marker);
     });
 
-    // Update sizes based on zoom (reuse single handler)
     if (zoomHandlerRef.current) map.off("zoom", zoomHandlerRef.current);
     const updateSizes = () => {
       const z = map.getZoom();
@@ -224,13 +221,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     map.on("zoom", updateSizes);
   }, [spots]);
 
-  // Fly to area
   useEffect(() => {
     if (!flyTo || !mapRef.current) return;
     mapRef.current.flyTo({ center: [flyTo[1], flyTo[0]], zoom: 16, duration: 800 });
   }, [flyTo]);
 
-  // Fly to spot with cinematic zoom
   const flyToSpot = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;
     if (!map) return;
