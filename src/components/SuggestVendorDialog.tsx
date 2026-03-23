@@ -25,7 +25,7 @@ export function SuggestVendorDialog() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("vendor_suggestions").insert({
+      const { error } = await supabase.from("vendor_suggestions" as any).insert({
         name: name.trim(),
         address: address.trim(),
         cuisine: cuisine.trim() || null,
