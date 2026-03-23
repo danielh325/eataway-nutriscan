@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import { AppShell } from "./components/AppShell";
 
@@ -22,8 +23,9 @@ const App = () => (
             <Route element={<AppShell />}>
               <Route path="/" element={<Index />} />
             </Route>
-            {/* Explore is full-screen (no AppShell wrapper) */}
+            {/* Explore and Admin are full-screen (no AppShell wrapper) */}
             <Route path="/explore" element={<Explore />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -1,5 +1,6 @@
 import { FoodSpot } from "@/data/types";
 import { Heart } from "lucide-react";
+import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
 
 interface FoodSpotCardProps {
   spot: FoodSpot;
@@ -9,18 +10,24 @@ interface FoodSpotCardProps {
 }
 
 export default function FoodSpotCard({ spot, isFavorite, onToggleFavorite, onSelect }: FoodSpotCardProps) {
+  const imageUrl = usePlacesPhoto(spot.name, spot.image);
+
   return (
     <div
       className="cursor-pointer group active:scale-[0.97] transition-transform"
       onClick={() => onSelect(spot)}
     >
       <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-muted">
-        <img
-          src={spot.image}
-          alt={spot.name}
-          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-          loading="lazy"
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={spot.name}
+            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No photo yet</div>
+        )}
         {/* Heart overlay */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(spot.id); }}

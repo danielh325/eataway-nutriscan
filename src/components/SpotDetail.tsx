@@ -3,6 +3,7 @@ import { FoodSpot, Review } from "@/data/types";
 import { Star, Heart, ArrowLeft, MapPin, Clock, Phone, Navigation, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
 
 interface SpotDetailProps {
   spot: FoodSpot;
@@ -31,6 +32,7 @@ function StarRating({ rating, onChange }: { rating: number; onChange?: (r: numbe
 export default function SpotDetail({ spot, isFavorite, onToggleFavorite, onBack, onAddReview }: SpotDetailProps) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const imageUrl = usePlacesPhoto(spot.name, spot.image);
 
   const handleSubmitReview = () => {
     if (!reviewText.trim()) return;
@@ -53,7 +55,11 @@ export default function SpotDetail({ spot, isFavorite, onToggleFavorite, onBack,
       {/* Hero image */}
       <div className="relative -mx-4 -mt-1">
         <div className="aspect-[16/9] w-full overflow-hidden rounded-b-2xl bg-muted">
-          <img src={spot.image} alt={spot.name} className="w-full h-full object-cover" />
+          {imageUrl ? (
+            <img src={imageUrl} alt={spot.name} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">No photo yet</div>
+          )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 rounded-b-2xl" />
 

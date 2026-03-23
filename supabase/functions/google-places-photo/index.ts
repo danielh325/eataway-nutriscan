@@ -1,0 +1,78 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { query, persist, spotName } = await req.json();
+    if (!query) {
+      return new Response(JSON.stringify({ error: 'Missing query' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const apiKey = Deno.env.get('GOOGLE_PLACES_API_KEY');
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: 'GOOGLE_PLACES_API_KEY not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const queries = [
+      `${query} restaurant Singapore`,
+      `${query} food Singapore`,
+      `${query} Singapore`,
+    ];
+
+    let candidate: any = null;
+    for (const q of queries) {
+      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&key=${apiKey}`;
+      const searchRes = await fetch(searchUrl);
+      const searchData = await searchRes.json();
+
+      const first = searchData.results?.[0];
+      if (!first) continue;
+
+      const types: string[] = first.types || [];
+      const blockedTypes = ['beauty_salon', 'spa', 'hair_care'];
+      if (types.some((t) => blockedTypes.includes(t))) continue;
+
+      candidate = first;
+      break;
+    }
+
+    const photoRef = candidate?.photos?.[0]?.photo_reference;
+    const photoUrl = photoRef
+      ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoRef}&key=${apiKey}`
+      : null;
+
+    if (persist && spotName) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      await supabase
+        .from('place_photos')
+        .upsert([{ spot_name: spotName, photo_url: photoUrl }], { onConflict: 'spot_name' });
+    }
+
+    return new Response(JSON.stringify({ photoUrl }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});

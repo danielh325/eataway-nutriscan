@@ -1,5 +1,6 @@
 import { FoodSpot } from "@/data/types";
 import { Heart, Star } from "lucide-react";
+import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
 
 interface RecommendationCardProps {
   spot: FoodSpot;
@@ -9,6 +10,8 @@ interface RecommendationCardProps {
 }
 
 export default function RecommendationCard({ spot, isFavorite, onToggleFavorite, onSelect }: RecommendationCardProps) {
+  const imageUrl = usePlacesPhoto(spot.name, spot.image);
+
   return (
     <div
       className="bg-white/95 backdrop-blur-2xl rounded-[20px] overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
@@ -16,12 +19,18 @@ export default function RecommendationCard({ spot, isFavorite, onToggleFavorite,
     >
       <div className="flex">
         {/* Main image */}
-        <img
-          src={spot.image}
-          alt={spot.name}
-          className="h-[120px] w-[120px] object-cover flex-shrink-0"
-          loading="lazy"
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={spot.name}
+            className="h-[120px] w-[120px] object-cover flex-shrink-0"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-[120px] w-[120px] flex-shrink-0 bg-muted flex items-center justify-center text-xs text-muted-foreground px-2 text-center">
+            No photo yet
+          </div>
+        )}
 
         {/* Info section */}
         <div className="flex-1 min-w-0 p-3 flex flex-col justify-between">
