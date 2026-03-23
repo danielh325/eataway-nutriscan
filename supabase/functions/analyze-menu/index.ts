@@ -183,56 +183,79 @@ serve(async (req) => {
       );
     }
 
-    console.log("Fast analysis with Gemini Pro...");
+    const gatewayErrors: Array<{ model: string; status: number; body: string }> = [];
+    let response: Response | null = null;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
+    for (const model of ANALYSIS_MODELS) {
+      console.log(`Menu analysis attempt with ${model}...`);
+
+      const attempt = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
 
 MANDATORY: Extract EVERY SINGLE item on this menu — every dish, appetizer, starter, main, side, dessert, drink, combo, and special. Do NOT skip any section of the menu. Scan systematically from top to bottom, left to right, covering every column and section visible in the image.
 
 After your first extraction pass, do a SECOND pass to verify you haven't missed anything. Missing even one dish is a critical failure.
 
 Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` },
-              },
-            ],
-          },
-        ],
-        tools: [EXTRACT_MENU_TOOL],
-        tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
-      }),
-    });
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` },
+                },
+              ],
+            },
+          ],
+          tools: [EXTRACT_MENU_TOOL],
+          tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
+        }),
+      });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (attempt.ok) {
+        response = attempt;
+        break;
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const attemptBody = await attempt.text();
+      gatewayErrors.push({ model, status: attempt.status, body: attemptBody.slice(0, 500) });
+    }
+
+    if (!response) {
+      const hadRateLimit = gatewayErrors.some((e) => e.status === 429);
+      const hadCreditsIssue = gatewayErrors.every((e) => e.status === 402);
+
+      if (hadRateLimit) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      const errorText = await response.text();
-      console.error("AI error:", response.status, errorText);
-      return new Response(JSON.stringify({ error: "Failed to analyze menu" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      if (hadCreditsIssue) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.error("AI error across fallback models:", gatewayErrors);
+      return new Response(JSON.stringify({ error: "Failed to analyze menu" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const data = await safeJsonFromResponse(response);
