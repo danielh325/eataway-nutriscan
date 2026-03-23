@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import MapView, { MapViewHandle, getTimeOfDay, TimePreset } from "@/components/MapView";
 import BottomSheet from "@/components/BottomSheet";
 import SearchFilterBar from "@/components/SearchFilterBar";
@@ -13,7 +14,7 @@ import { foodSpots } from "@/data/foodSpots";
 import { FoodSpot, GoalCategory, Review } from "@/data/types";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Search, Navigation } from "lucide-react";
+import { Search, Navigation, ScanLine } from "lucide-react";
 
 const Explore = () => {
   const [query, setQuery] = useState("");
