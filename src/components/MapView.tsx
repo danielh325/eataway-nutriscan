@@ -5,22 +5,36 @@ import { FoodSpot } from "@/data/types";
 
 const MAPBOX_TOKEN = "pk.eyJ1Ijoiam90aGFtbGltIiwiYSI6ImNtbGJzbXJzMzBxd2kzZm9yYnRvdDFuMHEifQ.XVBAE0qZM1ZoDM7QQZrjQQ";
 
+export const TIME_PRESETS = ["day", "night"] as const;
+export type TimePreset = (typeof TIME_PRESETS)[number];
+
+export function getTimeOfDay(): TimePreset {
+  const now = new Date();
+  const sgHour = (now.getUTCHours() + 8) % 24;
+  if (sgHour >= 7 && sgHour < 19) return "day";
+  return "night";
+}
+
 export interface MapViewHandle {
+  toggle3D: () => void;
+  geolocate: () => void;
   flyToSpot: (lat: number, lng: number) => void;
   resetView: () => void;
-  geolocate: () => void;
-  toggle3D: () => void;
+  fitToSpots: (spots: { lat: number; lng: number }[]) => void;
   is3D: boolean;
 }
 
 interface MapViewProps {
   spots: FoodSpot[];
   onSpotSelect: (spot: FoodSpot) => void;
-  className?: string;
+  flyTo?: [number, number] | null;
+  timePreset?: TimePreset;
+  onTimeChange?: (preset: TimePreset) => void;
+  onBoundsChange?: (bounds: { sw: [number, number]; ne: [number, number] }) => void;
 }
 
 const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { spots, onSpotSelect, className },
+  { spots, onSpotSelect, flyTo, timePreset, onTimeChange, onBoundsChange },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,11 +43,26 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const lastUserPos = useRef<[number, number] | null>(null);
   const onSpotSelectRef = useRef(onSpotSelect);
+  const onBoundsChangeRef = useRef(onBoundsChange);
   const [is3D, setIs3D] = useState(false);
   const geolocatedRef = useRef(false);
+  const suppressBoundsRef = useRef(false);
 
   useEffect(() => { onSpotSelectRef.current = onSpotSelect; }, [onSpotSelect]);
+  useEffect(() => { onBoundsChangeRef.current = onBoundsChange; }, [onBoundsChange]);
 
+  // Fire bounds to parent
+  const emitBounds = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !onBoundsChangeRef.current || suppressBoundsRef.current) return;
+    const b = map.getBounds();
+    onBoundsChangeRef.current({
+      sw: [b.getSouth(), b.getWest()],
+      ne: [b.getNorth(), b.getEast()],
+    });
+  }, []);
+
+  // Initialise map once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -43,18 +72,21 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       container: containerRef.current,
       style: "mapbox://styles/mapbox/standard",
       center: [103.8198, 1.3121],
-      zoom: 13,
+      zoom: 14,
       pitch: 0,
       bearing: 0,
       antialias: true,
       attributionControl: false,
       logoPosition: "bottom-left",
+      renderWorldCopies: false,
     });
 
+    // Hide Mapbox logo
     const style = document.createElement("style");
     style.textContent = `.mapboxgl-ctrl-logo, .mapboxgl-ctrl-attrib { display: none !important; }`;
     containerRef.current.appendChild(style);
 
+    // Force light theme
     map.on("style.load", () => {
       try {
         (map as any).setConfigProperty("basemap", "theme", "default");
@@ -63,22 +95,35 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         (map as any).setConfigProperty("basemap", "showPlaceLabels", true);
         (map as any).setConfigProperty("basemap", "lightPreset", "day");
         (map as any).setConfigProperty("basemap", "show3dObjects", false);
-      } catch {}
+      } catch (e) {
+        const layers = map.getStyle()?.layers || [];
+        layers.forEach((layer) => {
+          if (layer.id.includes("poi") && layer.type === "symbol") {
+            map.setLayoutProperty(layer.id, "visibility", "none");
+          }
+        });
+      }
     });
 
     mapRef.current = map;
 
-    // User location
+    // User location blue dot + auto-zoom to user on first fix
     let watchId: number | null = null;
     const startWatch = () => {
       if (!navigator.geolocation) return;
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          const { latitude, longitude } = pos.coords;
+          const { latitude, longitude, heading } = pos.coords;
+          const rotation = heading && !isNaN(heading) ? heading : 0;
+
           if (!userMarkerRef.current) {
             const el = document.createElement("div");
             el.className = "user-location-marker";
-            el.innerHTML = `<div class="user-loc-dot"></div><div class="user-loc-pulse"></div>`;
+            el.innerHTML = `
+              <div class="user-loc-heading"></div>
+              <div class="user-loc-dot"></div>
+              <div class="user-loc-pulse"></div>
+            `;
             userMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: "center" })
               .setLngLat([longitude, latitude])
               .addTo(map);
@@ -86,6 +131,11 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
             userMarkerRef.current.setLngLat([longitude, latitude]);
           }
           lastUserPos.current = [longitude, latitude];
+
+          const headingEl = userMarkerRef.current.getElement().querySelector(".user-loc-heading") as HTMLElement;
+          if (headingEl) headingEl.style.transform = `rotate(${rotation}deg)`;
+
+          // Auto-fly to user location on first fix
           if (!geolocatedRef.current) {
             geolocatedRef.current = true;
             map.flyTo({ center: [longitude, latitude], zoom: 14, duration: 800 });
@@ -99,18 +149,30 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     map.once("load", startWatch);
     if (map.loaded()) startWatch();
 
+    // Debounce bounds emission to avoid rapid recalculations
+    let boundsTimer: ReturnType<typeof setTimeout>;
+    const debouncedEmitBounds = () => {
+      clearTimeout(boundsTimer);
+      boundsTimer = setTimeout(emitBounds, 300);
+    };
+    map.on("idle", debouncedEmitBounds);
+
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      clearTimeout(boundsTimer);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
+      map.off("idle", debouncedEmitBounds);
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // Sync markers
+  // Sync individual markers
+  const zoomHandlerRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -118,10 +180,15 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     const currentIds = new Set(spots.map((s) => s.id));
     const existing = markersRef.current;
 
+    // Remove stale markers
     existing.forEach((marker, id) => {
-      if (!currentIds.has(id)) { marker.remove(); existing.delete(id); }
+      if (!currentIds.has(id)) {
+        marker.remove();
+        existing.delete(id);
+      }
     });
 
+    // Add new markers
     spots.forEach((spot) => {
       if (existing.has(spot.id)) return;
       const el = document.createElement("div");
@@ -139,7 +206,8 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       existing.set(spot.id, marker);
     });
 
-    // Zoom-based sizing
+    // Update sizes based on zoom (reuse single handler)
+    if (zoomHandlerRef.current) map.off("zoom", zoomHandlerRef.current);
     const updateSizes = () => {
       const z = map.getZoom();
       markersRef.current.forEach((marker) => {
@@ -151,14 +219,22 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         if (label) { label.style.display = z >= 15 ? "block" : "none"; }
       });
     };
+    zoomHandlerRef.current = updateSizes;
     updateSizes();
     map.on("zoom", updateSizes);
-    return () => { map.off("zoom", updateSizes); };
   }, [spots]);
 
+  // Fly to area
+  useEffect(() => {
+    if (!flyTo || !mapRef.current) return;
+    mapRef.current.flyTo({ center: [flyTo[1], flyTo[0]], zoom: 16, duration: 800 });
+  }, [flyTo]);
+
+  // Fly to spot with cinematic zoom
   const flyToSpot = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;
     if (!map) return;
+    suppressBoundsRef.current = true;
     setIs3D(true);
     try { (map as any).setConfigProperty("basemap", "show3dObjects", true); } catch {}
     map.flyTo({ center: [lng, lat], zoom: 17, pitch: 55, bearing: -15, duration: 1200, essential: true });
@@ -167,9 +243,10 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const resetView = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
+    suppressBoundsRef.current = false;
     setIs3D(false);
     try { (map as any).setConfigProperty("basemap", "show3dObjects", false); } catch {}
-    map.flyTo({ center: [103.8198, 1.3121], zoom: 13, pitch: 0, bearing: 0, duration: 800 });
+    map.flyTo({ center: [103.8198, 1.3121], zoom: 14, pitch: 0, bearing: 0, duration: 800 });
   }, []);
 
   const toggle3D = useCallback(() => {
@@ -184,20 +261,59 @@ const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const geolocate = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
+
+    const animateToUser = (lng: number, lat: number) => {
+      map.flyTo({ center: [lng, lat], zoom: 16, duration: 800, essential: true });
+
+      const onIdle = () => {
+        map.off("idle", onIdle);
+        const sorted = [...spots]
+          .map((s) => ({ ...s, dist: Math.sqrt((s.lat - lat) ** 2 + (s.lng - lng) ** 2) }))
+          .sort((a, b) => a.dist - b.dist);
+        const MAX_RADIUS = 0.027;
+        const nearby = sorted.filter((s) => s.dist <= MAX_RADIUS).slice(0, 10);
+        if (nearby.length > 0) {
+          const bounds = new mapboxgl.LngLatBounds();
+          bounds.extend([lng, lat]);
+          nearby.forEach((s) => bounds.extend([s.lng, s.lat]));
+          setTimeout(() => {
+            map.fitBounds(bounds, {
+              padding: { top: 80, bottom: 180, left: 40, right: 40 },
+              maxZoom: 15,
+              duration: 1000,
+            });
+          }, 400);
+        }
+      };
+      map.once("idle", onIdle);
+    };
+
     if (lastUserPos.current) {
-      map.flyTo({ center: lastUserPos.current, zoom: 15, duration: 800 });
-    } else {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15, duration: 800 }),
-        () => {},
-        { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
-      );
+      animateToUser(lastUserPos.current[0], lastUserPos.current[1]);
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => animateToUser(pos.coords.longitude, pos.coords.latitude),
+      () => {},
+      { enableHighAccuracy: false, maximumAge: 30000, timeout: 3000 }
+    );
+  }, [spots]);
+
+  const fitToSpots = useCallback((spots: { lat: number; lng: number }[]) => {
+    const map = mapRef.current;
+    if (!map || spots.length === 0) return;
+    const bounds = new mapboxgl.LngLatBounds();
+    spots.forEach((s) => bounds.extend([s.lng, s.lat]));
+    map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 600 });
   }, []);
 
-  useImperativeHandle(ref, () => ({ flyToSpot, resetView, geolocate, toggle3D, is3D }), [flyToSpot, resetView, geolocate, toggle3D, is3D]);
+  useImperativeHandle(ref, () => ({ toggle3D, geolocate, flyToSpot, resetView, fitToSpots, is3D }), [toggle3D, geolocate, flyToSpot, resetView, fitToSpots, is3D]);
 
-  return <div ref={containerRef} className={className || "h-full w-full"} />;
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  );
 });
 
 export default MapView;
