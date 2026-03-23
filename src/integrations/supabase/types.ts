@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_spot_status: {
+        Row: {
+          created_at: string
+          hidden: boolean
+          id: string
+          reviewed: boolean
+          spot_name: string
+        }
+        Insert: {
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          reviewed?: boolean
+          spot_name: string
+        }
+        Update: {
+          created_at?: string
+          hidden?: boolean
+          id?: string
+          reviewed?: boolean
+          spot_name?: string
+        }
+        Relationships: []
+      }
       daily_goals: {
         Row: {
           calories_kcal: number
@@ -95,6 +119,30 @@ export type Database = {
           portion_multiplier?: number
           protein_g?: number
           user_id?: string
+        }
+        Relationships: []
+      }
+      place_photos: {
+        Row: {
+          created_at: string
+          id: string
+          photo_url: string | null
+          spot_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          photo_url?: string | null
+          spot_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          photo_url?: string | null
+          spot_name?: string
+          updated_at?: string
         }
         Relationships: []
       }
