@@ -124,7 +124,14 @@ function extractParsed(data: any): any {
   if (toolCall?.function?.arguments) {
     try { return JSON.parse(toolCall.function.arguments); } catch {}
   }
-  const content = data.choices?.[0]?.message?.content;
+
+  const contentValue = data.choices?.[0]?.message?.content;
+  const content = typeof contentValue === "string"
+    ? contentValue
+    : Array.isArray(contentValue)
+      ? contentValue.map((part: any) => (typeof part === "string" ? part : part?.text || "")).join("\n")
+      : "";
+
   if (content) {
     try {
       let s = content.trim();
@@ -153,13 +160,36 @@ function avgRange(a: string, b: string): string {
   return `${Math.round(avg - spread)}-${Math.round(avg + spread)}`;
 }
 
+async function safeJsonFromResponse(response: Response): Promise<any | null> {
+  const raw = await response.text();
+  if (!raw?.trim()) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to parse AI JSON response:", e, raw.slice(0, 300));
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { dishes, restaurant_context, imageBase64, mimeType } = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (parseErr) {
+      console.error("Failed to parse refinement request:", parseErr);
+      return new Response(
+        JSON.stringify({ error: "Invalid refinement payload" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { dishes, restaurant_context, imageBase64, mimeType } = body;
 
     if (!dishes || !Array.isArray(dishes)) {
       return new Response(
@@ -209,12 +239,17 @@ serve(async (req) => {
         });
 
         if (gptResponse.ok) {
-          const gptData = await gptResponse.json();
-          const gptParsed = extractParsed(gptData);
-          gptDishes = gptParsed?.dishes || [];
-          console.log(`GPT-5 returned ${gptDishes.length} dishes`);
+          const gptData = await safeJsonFromResponse(gptResponse);
+          if (gptData) {
+            const gptParsed = extractParsed(gptData);
+            gptDishes = Array.isArray(gptParsed?.dishes) ? gptParsed.dishes : [];
+            console.log(`GPT-5 returned ${gptDishes.length} dishes`);
+          } else {
+            console.warn("GPT-5 returned an empty or invalid JSON payload");
+          }
         } else {
-          console.warn("GPT-5 failed:", gptResponse.status);
+          const gptErr = await gptResponse.text();
+          console.warn("GPT-5 failed:", gptResponse.status, gptErr.slice(0, 180));
         }
       } catch (e: any) {
         console.warn("GPT-5 ensemble error:", e?.message || e);
@@ -278,8 +313,12 @@ serve(async (req) => {
       });
 
       if (verifyResponse.ok) {
-        const verifyData = await verifyResponse.json();
-        const verifyParsed = extractParsed(verifyData);
+        const verifyData = await safeJsonFromResponse(verifyResponse);
+        if (!verifyData) {
+          console.warn("Verification returned an empty or invalid JSON payload");
+        }
+
+        const verifyParsed = verifyData ? extractParsed(verifyData) : null;
         if (verifyParsed?.corrections) {
           let correctionCount = 0;
           for (const c of verifyParsed.corrections) {
@@ -298,6 +337,9 @@ serve(async (req) => {
           }
           console.log(`Verification: ${correctionCount} corrections applied`);
         }
+      } else {
+        const verifyErr = await verifyResponse.text();
+        console.warn("Verification request failed:", verifyResponse.status, verifyErr.slice(0, 180));
       }
     } catch (e: any) {
       console.warn("Verification failed (non-critical):", e?.message || e);
