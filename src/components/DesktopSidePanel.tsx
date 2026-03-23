@@ -1,6 +1,7 @@
 import { FoodSpot, GoalCategory } from "@/data/types";
 import { Review } from "@/data/types";
-import { Search } from "lucide-react";
+import { Search, ScanLine } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import SearchFilterBar from "./SearchFilterBar";
 import FoodSpotCard from "./FoodSpotCard";
 import SpotDetail from "./SpotDetail";
