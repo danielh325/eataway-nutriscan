@@ -136,6 +136,18 @@ const EXTRACT_MENU_TOOL = {
   },
 };
 
+async function safeJsonFromResponse(response: Response): Promise<any | null> {
+  const raw = await response.text();
+  if (!raw?.trim()) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("Failed to parse AI response JSON:", e, raw.slice(0, 400));
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -221,7 +233,12 @@ Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE res
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const data = await response.json();
+    const data = await safeJsonFromResponse(response);
+    if (!data) {
+      return new Response(JSON.stringify({ error: "Invalid or empty AI response" }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     let parsed = extractParsed(data);
 
     if (!parsed) {
@@ -270,7 +287,14 @@ function extractParsed(data: any): any {
   if (toolCall?.function?.arguments) {
     try { return JSON.parse(toolCall.function.arguments); } catch {}
   }
-  const content = data.choices?.[0]?.message?.content;
+
+  const contentValue = data.choices?.[0]?.message?.content;
+  const content = typeof contentValue === "string"
+    ? contentValue
+    : Array.isArray(contentValue)
+      ? contentValue.map((part: any) => (typeof part === "string" ? part : part?.text || "")).join("\n")
+      : "";
+
   if (content) {
     try {
       let s = content.trim();
