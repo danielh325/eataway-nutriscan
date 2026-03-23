@@ -119,12 +119,86 @@
   }
 }
 
-/* Map markers */
+/* Bottom sheet — Apple Maps style */
+.sheet-panel {
+  background: hsl(0 0% 100% / 0.97);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 -1px 0 hsl(0 0% 0% / 0.06), 0 -8px 32px hsl(0 0% 0% / 0.18);
+
+  /* Light-mode overrides inside the sheet */
+  --background: 0 0% 100%;
+  --foreground: 220 20% 10%;
+  --card: 0 0% 97%;
+  --card-foreground: 220 20% 10%;
+  --secondary: 220 10% 94%;
+  --secondary-foreground: 220 15% 30%;
+  --muted: 220 10% 95%;
+  --muted-foreground: 220 10% 45%;
+  --accent: 152 40% 92%;
+  --accent-foreground: 152 50% 25%;
+  --border: 220 10% 90%;
+  --input: 220 10% 93%;
+}
+
+/* Bottom sheet — dark mode (night) */
+.sheet-panel-dark {
+  background: hsl(220 20% 8% / 0.97);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 -1px 0 hsl(0 0% 100% / 0.06), 0 -8px 32px hsl(0 0% 0% / 0.4);
+
+  --foreground: 210 20% 92%;
+  --card: 220 18% 12%;
+  --card-foreground: 210 20% 92%;
+  --secondary: 220 16% 16%;
+  --secondary-foreground: 210 20% 80%;
+  --muted: 220 14% 14%;
+  --muted-foreground: 215 12% 55%;
+  --accent: 152 40% 15%;
+  --accent-foreground: 152 60% 65%;
+  --border: 220 12% 18%;
+  --input: 220 14% 18%;
+}
+
+/* Mapbox controls */
+.mapboxgl-ctrl-attrib {
+  background: hsl(0 0% 100% / 0.8) !important;
+  color: hsl(220 10% 40%) !important;
+  font-size: 10px !important;
+  border-radius: 4px !important;
+}
+
+.mapboxgl-ctrl-attrib a {
+  color: hsl(152 50% 35%) !important;
+}
+
+.mapboxgl-ctrl-group {
+  background: hsl(0 0% 100% / 0.95) !important;
+  border: 1px solid hsl(220 10% 88%) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+.mapboxgl-ctrl-group button {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.mapboxgl-ctrl-group button + button {
+  border-top: 1px solid hsl(220 10% 90%) !important;
+}
+
+/* Map marker — circular store photo */
 .map-marker-photo {
   display: flex;
   flex-direction: column;
   align-items: center;
   cursor: pointer;
+  will-change: auto;
+  transition: none !important;
 }
 
 .marker-photo-wrapper {
@@ -154,6 +228,8 @@
   max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .map-marker-photo:hover .marker-photo-wrapper {
@@ -181,6 +257,32 @@
   z-index: 2;
 }
 
+.user-loc-heading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  transform: translate(-50%, -50%) rotate(0deg);
+  width: 44px;
+  height: 44px;
+  z-index: 1;
+}
+
+.user-loc-heading::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 16px solid hsl(210, 100%, 56%);
+  opacity: 0.5;
+  filter: blur(1px);
+}
+
 .user-loc-pulse {
   position: absolute;
   top: 50%;
@@ -198,4 +300,23 @@
 @keyframes user-pulse {
   0% { width: 16px; height: 16px; opacity: 0.3; }
   100% { width: 50px; height: 50px; opacity: 0; }
+}
+
+/* Custom scrollbar — hidden by default */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

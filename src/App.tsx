@@ -21,8 +21,9 @@ const App = () => (
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<Index />} />
-              <Route path="/explore" element={<Explore />} />
             </Route>
+            {/* Explore is full-screen (no AppShell wrapper) */}
+            <Route path="/explore" element={<Explore />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
