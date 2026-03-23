@@ -67,7 +67,8 @@ serve(async (req) => {
       });
     }
 
-    const ingredientList = ingredients?.length > 0 ? ` with ${ingredients.slice(0, 5).join(", ")}` : "";
+    const safeIngredients = Array.isArray(ingredients) ? ingredients : [];
+    const ingredientList = safeIngredients.length > 0 ? ` with ${safeIngredients.slice(0, 5).join(", ")}` : "";
     const method = cooking_method ? ` ${cooking_method}` : "";
     const prompt = `A professional food photography shot of${method} ${dish_name}${ingredientList}. Beautifully plated on a restaurant plate, soft natural lighting, shallow depth of field, appetizing and realistic, top-down or 45 degree angle, clean background.`;
 
