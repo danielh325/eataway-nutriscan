@@ -5,7 +5,7 @@ import { triggerBatchPhotoFetch } from "@/utils/batchPhotoFetch";
 import { invalidatePlacesPhotoCache } from "@/hooks/usePlacesPhoto";
 import {
   ArrowLeft, RefreshCw, Check, X, Image, Pencil, Trash2,
-  Eye, EyeOff, Lock, CheckCircle2, Circle, Search, Upload
+  Eye, EyeOff, Lock, CheckCircle2, Circle
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -16,6 +16,9 @@ export default function Admin() {
   const navigate = useNavigate();
   const [isAuthed, setIsAuthed] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   // Photos
   const [photos, setPhotos] = useState<Map<string, string | null>>(new Map());
@@ -31,9 +34,15 @@ export default function Admin() {
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "reviewed">("pending");
 
   const handleLogin = () => {
-    if (passwordInput === ADMIN_PASSWORD) {
+    const normalized = passwordInput.trim();
+    if (normalized === ADMIN_PASSWORD) {
       setIsAuthed(true);
+      setAdminPassword(normalized);
+      setPasswordInput("");
+      setLoginError("");
+      return;
     }
+    setLoginError("Incorrect password. Please try again.");
   };
 
   const loadPhotos = useCallback(async () => {
@@ -52,6 +61,18 @@ export default function Admin() {
     setStatuses(map);
   }, []);
 
+  const runAdminAction = useCallback(async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("admin-photo-actions", {
+      body: {
+        adminPassword,
+        ...payload,
+      },
+    });
+
+    if (error) throw new Error(error.message || "Admin action failed");
+    if ((data as any)?.error) throw new Error((data as any).error);
+  }, [adminPassword]);
+
   useEffect(() => {
     if (!isAuthed) return;
     document.body.style.overflow = "auto";
@@ -61,51 +82,86 @@ export default function Admin() {
   }, [isAuthed, loadPhotos, loadStatuses]);
 
   const handleBatchFetch = async () => {
+    if (!adminPassword) {
+      setFetchProgress("Admin session expired. Please reload and log in again.");
+      return;
+    }
+
     setFetching(true);
     setFetchProgress("Starting batch fetch...");
+    setActionError("");
     try {
-      const result = await triggerBatchPhotoFetch();
+      const result = await triggerBatchPhotoFetch(adminPassword);
       setFetchProgress(`Done! ${result.totalFetched} new, ${result.totalCached} cached`);
       invalidatePlacesPhotoCache();
       await loadPhotos();
-    } catch { setFetchProgress("Error during fetch"); }
+    } catch (err: any) {
+      setFetchProgress(err?.message || "Error during fetch");
+    }
     setFetching(false);
   };
 
   const handleReplacePhoto = async (spotName: string, url: string) => {
-    const { error } = await supabase.from("place_photos").upsert({ spot_name: spotName, photo_url: url } as any, { onConflict: "spot_name" });
-    if (!error) {
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
+
+    try {
+      await runAdminAction({ action: "upsertPhoto", spotName, photoUrl: trimmedUrl });
       setPhotos((p) => new Map(p).set(spotName, url));
       invalidatePlacesPhotoCache();
       setEditingSpot(null);
       setNewUrl("");
+      setActionError("");
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to save photo.");
     }
   };
 
   const handleDeletePhoto = async (spotName: string) => {
-    await supabase.from("place_photos").delete().eq("spot_name", spotName);
-    setPhotos((p) => { const m = new Map(p); m.delete(spotName); return m; });
-    invalidatePlacesPhotoCache();
+    try {
+      await runAdminAction({ action: "deletePhoto", spotName });
+      setPhotos((p) => { const m = new Map(p); m.delete(spotName); return m; });
+      invalidatePlacesPhotoCache();
+      setActionError("");
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to delete photo.");
+    }
   };
 
   const toggleReviewed = async (spotName: string) => {
     const current = statuses.get(spotName);
     const newVal = !(current?.reviewed ?? false);
-    await supabase.from("admin_spot_status").upsert(
-      { spot_name: spotName, reviewed: newVal, hidden: current?.hidden ?? false } as any,
-      { onConflict: "spot_name" }
-    );
-    setStatuses((p) => new Map(p).set(spotName, { reviewed: newVal, hidden: current?.hidden ?? false }));
+
+    try {
+      await runAdminAction({
+        action: "upsertStatus",
+        spotName,
+        reviewed: newVal,
+        hidden: current?.hidden ?? false,
+      });
+      setStatuses((p) => new Map(p).set(spotName, { reviewed: newVal, hidden: current?.hidden ?? false }));
+      setActionError("");
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to update review status.");
+    }
   };
 
   const toggleHidden = async (spotName: string) => {
     const current = statuses.get(spotName);
     const newVal = !(current?.hidden ?? false);
-    await supabase.from("admin_spot_status").upsert(
-      { spot_name: spotName, hidden: newVal, reviewed: current?.reviewed ?? false } as any,
-      { onConflict: "spot_name" }
-    );
-    setStatuses((p) => new Map(p).set(spotName, { hidden: newVal, reviewed: current?.reviewed ?? false }));
+
+    try {
+      await runAdminAction({
+        action: "upsertStatus",
+        spotName,
+        hidden: newVal,
+        reviewed: current?.reviewed ?? false,
+      });
+      setStatuses((p) => new Map(p).set(spotName, { hidden: newVal, reviewed: current?.reviewed ?? false }));
+      setActionError("");
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to update visibility.");
+    }
   };
 
   const mergedSpots = useMemo(() => {
@@ -136,12 +192,18 @@ export default function Admin() {
             <input
               type="password"
               value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  if (loginError) setLoginError("");
+                }}
               placeholder="Password"
               className="w-full px-3 py-2 rounded-lg text-sm mb-3"
               style={{ border: "1px solid #d1d5db" }}
               autoFocus
             />
+              {loginError && (
+                <p className="text-xs mb-3" style={{ color: "#dc2626" }}>{loginError}</p>
+              )}
             <button
               type="submit"
               className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
@@ -191,6 +253,7 @@ export default function Admin() {
             {fetching ? "Fetching..." : "Batch Fetch All from Google"}
           </button>
           {fetchProgress && <span className="text-sm" style={{ color: "#6b7280" }}>{fetchProgress}</span>}
+          {actionError && <span className="text-sm" style={{ color: "#dc2626" }}>{actionError}</span>}
           <div className="flex-1" />
           <input type="text" placeholder="Search..." value={photoSearch} onChange={(e) => setPhotoSearch(e.target.value)}
             className="px-3 py-2 rounded-lg text-sm w-48" style={{ border: "1px solid #d1d5db", background: "#fff" }} />
