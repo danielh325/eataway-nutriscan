@@ -10,6 +10,7 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const ADMIN_PASSWORD = "eataway2025";
+type SpotStatus = { reviewed: boolean; hidden: boolean };
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -29,29 +30,15 @@ export default function Admin() {
   const [statuses, setStatuses] = useState<Map<string, SpotStatus>>(new Map());
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "reviewed">("pending");
 
-  // Check admin role server-side
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setAdminLoading(false);
-      return;
+  const handleLogin = () => {
+    if (passwordInput === ADMIN_PASSWORD) {
+      setIsAuthed(true);
     }
-    const checkAdmin = async () => {
-      const { data } = await supabase
-        .from("user_roles" as any)
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-      setIsAdmin(!!data);
-      setAdminLoading(false);
-    };
-    checkAdmin();
-  }, [user, authLoading]);
+  };
 
   const loadPhotos = useCallback(async () => {
     setPhotoLoading(true);
-    const { data } = await supabase.from("place_photos" as any).select("spot_name, photo_url");
+    const { data } = await supabase.from("place_photos").select("spot_name, photo_url");
     const map = new Map<string, string | null>();
     if (data) (data as any[]).forEach((r) => map.set(r.spot_name, r.photo_url));
     setPhotos(map);
@@ -59,19 +46,19 @@ export default function Admin() {
   }, []);
 
   const loadStatuses = useCallback(async () => {
-    const { data } = await supabase.from("admin_spot_status" as any).select("spot_name, reviewed, hidden");
+    const { data } = await supabase.from("admin_spot_status").select("spot_name, reviewed, hidden");
     const map = new Map<string, SpotStatus>();
     if (data) (data as any[]).forEach((r) => map.set(r.spot_name, { reviewed: r.reviewed ?? false, hidden: r.hidden ?? false }));
     setStatuses(map);
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAuthed) return;
     document.body.style.overflow = "auto";
     loadPhotos();
     loadStatuses();
     return () => { document.body.style.overflow = "hidden"; };
-  }, [isAdmin, loadPhotos, loadStatuses]);
+  }, [isAuthed, loadPhotos, loadStatuses]);
 
   const handleBatchFetch = async () => {
     setFetching(true);
@@ -86,7 +73,7 @@ export default function Admin() {
   };
 
   const handleReplacePhoto = async (spotName: string, url: string) => {
-    const { error } = await supabase.from("place_photos" as any).upsert({ spot_name: spotName, photo_url: url } as any, { onConflict: "spot_name" });
+    const { error } = await supabase.from("place_photos").upsert({ spot_name: spotName, photo_url: url } as any, { onConflict: "spot_name" });
     if (!error) {
       setPhotos((p) => new Map(p).set(spotName, url));
       invalidatePlacesPhotoCache();
@@ -96,7 +83,7 @@ export default function Admin() {
   };
 
   const handleDeletePhoto = async (spotName: string) => {
-    await supabase.from("place_photos" as any).delete().eq("spot_name", spotName);
+    await supabase.from("place_photos").delete().eq("spot_name", spotName);
     setPhotos((p) => { const m = new Map(p); m.delete(spotName); return m; });
     invalidatePlacesPhotoCache();
   };
@@ -104,7 +91,7 @@ export default function Admin() {
   const toggleReviewed = async (spotName: string) => {
     const current = statuses.get(spotName);
     const newVal = !(current?.reviewed ?? false);
-    await supabase.from("admin_spot_status" as any).upsert(
+    await supabase.from("admin_spot_status").upsert(
       { spot_name: spotName, reviewed: newVal, hidden: current?.hidden ?? false } as any,
       { onConflict: "spot_name" }
     );
@@ -114,7 +101,7 @@ export default function Admin() {
   const toggleHidden = async (spotName: string) => {
     const current = statuses.get(spotName);
     const newVal = !(current?.hidden ?? false);
-    await supabase.from("admin_spot_status" as any).upsert(
+    await supabase.from("admin_spot_status").upsert(
       { spot_name: spotName, hidden: newVal, reviewed: current?.reviewed ?? false } as any,
       { onConflict: "spot_name" }
     );
@@ -136,50 +123,31 @@ export default function Admin() {
   const reviewedCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.reviewed).length;
   const hiddenCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.hidden).length;
 
-  if (authLoading || adminLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
-        <p className="text-sm" style={{ color: "#6b7280" }}>Checking access...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "#f3f4f6" }}>
-            <LogIn className="w-6 h-6" style={{ color: "#6b7280" }} />
-          </div>
-          <h1 className="text-lg font-bold mb-2">Sign In Required</h1>
-          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Please sign in with your admin account to access this page.</p>
-          <button
-            onClick={() => navigate("/")}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ background: "#2563eb" }}
-          >
-            Go to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
+  if (!isAuthed) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
         <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "#fee2e2" }}>
             <Lock className="w-6 h-6" style={{ color: "#dc2626" }} />
           </div>
-          <h1 className="text-lg font-bold mb-2">Access Denied</h1>
-          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Your account does not have admin privileges.</p>
+          <h1 className="text-lg font-bold mb-2">Admin Access</h1>
+          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Enter the admin password to continue.</p>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+            placeholder="Password"
+            className="w-full px-3 py-2 rounded-lg text-sm mb-3"
+            style={{ border: "1px solid #d1d5db" }}
+            autoFocus
+          />
           <button
-            onClick={() => navigate("/")}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+            onClick={handleLogin}
+            className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
             style={{ background: "#2563eb" }}
           >
-            Go to Home
+            Enter
           </button>
         </div>
       </div>
