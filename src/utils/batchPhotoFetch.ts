@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { foodSpots } from "@/data/foodSpots";
 
 // Call this once to populate the DB with all Google Places photos
-export async function triggerBatchPhotoFetch() {
+export async function triggerBatchPhotoFetch(adminPassword?: string) {
   const spotInfos = foodSpots.map(s => ({
     name: s.name,
     address: s.address,
@@ -20,12 +20,20 @@ export async function triggerBatchPhotoFetch() {
     
     try {
       const { data, error } = await supabase.functions.invoke("batch-fetch-photos", {
-        body: { spotInfos: chunk },
+        body: { spotInfos: chunk, adminPassword },
       });
 
       if (error) {
+        const message = error.message || "Batch fetch failed";
+        if (/unauthorized|forbidden|admin/i.test(message)) {
+          throw new Error("Admin authorization failed. Please log in again.");
+        }
         console.error("Batch fetch error:", error);
         continue;
+      }
+
+      if ((data as any)?.error) {
+        throw new Error((data as any).error);
       }
 
       totalFetched += data?.fetched || 0;
