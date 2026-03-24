@@ -132,23 +132,24 @@ export default function Admin() {
           </div>
           <h1 className="text-lg font-bold mb-2">Admin Access</h1>
           <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Enter the admin password to continue.</p>
-          <input
-            type="password"
-            value={passwordInput}
-            onChange={(e) => setPasswordInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            placeholder="Password"
-            className="w-full px-3 py-2 rounded-lg text-sm mb-3"
-            style={{ border: "1px solid #d1d5db" }}
-            autoFocus
-          />
-          <button
-            onClick={handleLogin}
-            className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ background: "#2563eb" }}
-          >
-            Enter
-          </button>
+          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Password"
+              className="w-full px-3 py-2 rounded-lg text-sm mb-3"
+              style={{ border: "1px solid #d1d5db" }}
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
+              style={{ background: "#2563eb" }}
+            >
+              Enter
+            </button>
+          </form>
         </div>
       </div>
     );
