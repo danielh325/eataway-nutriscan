@@ -3,23 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { foodSpots as hardcodedSpots } from "@/data/foodSpots";
 import { triggerBatchPhotoFetch } from "@/utils/batchPhotoFetch";
 import { invalidatePlacesPhotoCache } from "@/hooks/usePlacesPhoto";
-import { FoodSpot } from "@/data/types";
+import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft, RefreshCw, Check, X, Image, Pencil, Trash2,
-  Eye, EyeOff, Lock, CheckCircle2, Circle, Search, Upload
+  Eye, EyeOff, Lock, CheckCircle2, Circle, Search, Upload, LogIn
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const ADMIN_PASSWORD = "eatawaykeypassadmin12345";
-
-type Tab = "review" | "stores";
 type SpotStatus = { reviewed: boolean; hidden: boolean };
 
 export default function Admin() {
   const navigate = useNavigate();
-  const [authed, setAuthed] = useState(false);
-  const [password, setPassword] = useState("");
-  const [pwError, setPwError] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(true);
 
   // Photos
   const [photos, setPhotos] = useState<Map<string, string | null>>(new Map());
@@ -34,16 +31,25 @@ export default function Admin() {
   const [statuses, setStatuses] = useState<Map<string, SpotStatus>>(new Map());
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "reviewed">("pending");
 
-  const [tab, setTab] = useState<Tab>("review");
-
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      setAuthed(true);
-      setPwError(false);
-    } else {
-      setPwError(true);
+  // Check admin role server-side
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setAdminLoading(false);
+      return;
     }
-  };
+    const checkAdmin = async () => {
+      const { data } = await supabase
+        .from("user_roles" as any)
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+      setAdminLoading(false);
+    };
+    checkAdmin();
+  }, [user, authLoading]);
 
   const loadPhotos = useCallback(async () => {
     setPhotoLoading(true);
@@ -62,12 +68,12 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (!authed) return;
+    if (!isAdmin) return;
     document.body.style.overflow = "auto";
     loadPhotos();
     loadStatuses();
     return () => { document.body.style.overflow = "hidden"; };
-  }, [authed, loadPhotos, loadStatuses]);
+  }, [isAdmin, loadPhotos, loadStatuses]);
 
   const handleBatchFetch = async () => {
     setFetching(true);
@@ -132,47 +138,55 @@ export default function Admin() {
   const reviewedCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.reviewed).length;
   const hiddenCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.hidden).length;
 
-  if (!authed) {
+  if (authLoading || adminLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#f3f4f6" }}>
-              <Lock className="w-5 h-5" style={{ color: "#6b7280" }} />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold">Admin Access</h1>
-              <p className="text-sm" style={{ color: "#6b7280" }}>Enter password to continue</p>
-            </div>
+        <p className="text-sm" style={{ color: "#6b7280" }}>Checking access...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "#f3f4f6" }}>
+            <LogIn className="w-6 h-6" style={{ color: "#6b7280" }} />
           </div>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setPwError(false); }}
-            onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            placeholder="Password"
-            className="w-full px-4 py-3 rounded-lg text-sm mb-3"
-            style={{ border: `1px solid ${pwError ? "#ef4444" : "#d1d5db"}`, background: "#fff" }}
-            autoFocus
-          />
-          {pwError && <p className="text-sm mb-3" style={{ color: "#ef4444" }}>Wrong password</p>}
+          <h1 className="text-lg font-bold mb-2">Sign In Required</h1>
+          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Please sign in with your admin account to access this page.</p>
           <button
-            onClick={handleLogin}
-            className="w-full py-3 rounded-lg text-sm font-semibold text-white"
+            onClick={() => navigate("/")}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white"
             style={{ background: "#2563eb" }}
           >
-            Enter
+            Go to Home
           </button>
         </div>
       </div>
     );
   }
 
-  const tabStyle = (t: Tab) => ({
-    background: tab === t ? "#1f2937" : "#fff",
-    color: tab === t ? "#fff" : "#374151",
-    border: tab === t ? "none" : "1px solid #e5e7eb",
-  });
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "#fee2e2" }}>
+            <Lock className="w-6 h-6" style={{ color: "#dc2626" }} />
+          </div>
+          <h1 className="text-lg font-bold mb-2">Access Denied</h1>
+          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Your account does not have admin privileges.</p>
+          <button
+            onClick={() => navigate("/")}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: "#2563eb" }}
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "#f9fafb", color: "#111827" }}>
