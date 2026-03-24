@@ -9,13 +9,12 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-type SpotStatus = { reviewed: boolean; hidden: boolean };
+const ADMIN_PASSWORD = "eataway2025";
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminLoading, setAdminLoading] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
 
   // Photos
   const [photos, setPhotos] = useState<Map<string, string | null>>(new Map());
