@@ -3,10 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { foodSpots as hardcodedSpots } from "@/data/foodSpots";
 import { triggerBatchPhotoFetch } from "@/utils/batchPhotoFetch";
 import { invalidatePlacesPhotoCache } from "@/hooks/usePlacesPhoto";
-import { useAuth } from "@/hooks/useAuth";
 import {
   ArrowLeft, RefreshCw, Check, X, Image, Pencil, Trash2,
-  Eye, EyeOff, Lock, CheckCircle2, Circle, Search, Upload, LogIn
+  Eye, EyeOff, Lock, CheckCircle2, Circle, Search, Upload
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
