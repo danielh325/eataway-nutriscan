@@ -46,17 +46,30 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-  const fetchMenu = useCallback(async (forceRefresh = false) => {
+  const loadFromDB = useCallback(async () => {
+    const { data } = await supabase
+      .from("vendor_menu_items")
+      .select("*")
+      .eq("spot_name", spotName);
+    if (data && data.length > 0) {
+      setItems(data.map((item: any) => ({
+        ...item,
+        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+      })));
+      return true;
+    }
+    return false;
+  }, [spotName]);
+
+  const discoverMenu = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("discover-vendor-menu", {
-        body: { spotName, address, menuHighlights, forceRefresh },
+        body: { spotName, address, menuHighlights, forceRefresh: true },
       });
-
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
-
       const menuItems = (data?.items || []).map((item: any) => ({
         ...item,
         ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
@@ -71,8 +84,15 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   }, [spotName, address, menuHighlights]);
 
   useEffect(() => {
-    fetchMenu();
-  }, [fetchMenu]);
+    setLoading(true);
+    loadFromDB().then((found) => {
+      if (!found) {
+        discoverMenu();
+      } else {
+        setLoading(false);
+      }
+    });
+  }, [loadFromDB, discoverMenu]);
 
   const categories = ["All", ...CATEGORY_ORDER.filter((cat) => items.some((i) => i.category === cat))];
   const filtered = activeCategory === "All" ? items : items.filter((i) => i.category === activeCategory);
@@ -96,7 +116,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return (
       <div className="py-6 text-center space-y-3">
         <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => fetchMenu(true)} className="rounded-xl gap-2">
+        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="rounded-xl gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Try Again
         </Button>
       </div>
@@ -107,7 +127,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return (
       <div className="py-6 text-center">
         <p className="text-sm text-muted-foreground">No menu data available yet.</p>
-        <Button variant="outline" size="sm" onClick={() => fetchMenu(true)} className="mt-3 rounded-xl gap-2">
+        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="mt-3 rounded-xl gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Discover Menu
         </Button>
       </div>
@@ -125,7 +145,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => fetchMenu(true)}
+          onClick={() => discoverMenu()}
           className="text-xs text-muted-foreground hover:text-foreground rounded-lg h-8 gap-1"
         >
           <RefreshCw className="h-3 w-3" /> Refresh
