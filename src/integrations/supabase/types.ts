@@ -191,6 +191,69 @@ export type Database = {
         }
         Relationships: []
       }
+      vendor_menu_items: {
+        Row: {
+          calories_kcal: number
+          carbs_g: number
+          category: string | null
+          confidence: string
+          created_at: string
+          description: string | null
+          dish_name: string
+          fat_g: number
+          fiber_g: number | null
+          id: string
+          image_url: string | null
+          ingredients: Json | null
+          is_popular: boolean | null
+          price: string | null
+          protein_g: number
+          source: string | null
+          spot_name: string
+          updated_at: string
+        }
+        Insert: {
+          calories_kcal?: number
+          carbs_g?: number
+          category?: string | null
+          confidence?: string
+          created_at?: string
+          description?: string | null
+          dish_name: string
+          fat_g?: number
+          fiber_g?: number | null
+          id?: string
+          image_url?: string | null
+          ingredients?: Json | null
+          is_popular?: boolean | null
+          price?: string | null
+          protein_g?: number
+          source?: string | null
+          spot_name: string
+          updated_at?: string
+        }
+        Update: {
+          calories_kcal?: number
+          carbs_g?: number
+          category?: string | null
+          confidence?: string
+          created_at?: string
+          description?: string | null
+          dish_name?: string
+          fat_g?: number
+          fiber_g?: number | null
+          id?: string
+          image_url?: string | null
+          ingredients?: Json | null
+          is_popular?: boolean | null
+          price?: string | null
+          protein_g?: number
+          source?: string | null
+          spot_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vendor_suggestions: {
         Row: {
           address: string
