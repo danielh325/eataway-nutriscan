@@ -120,28 +120,12 @@ export default function SpotDetail({ spot, isFavorite, onToggleFavorite, onBack,
         </Button>
       </a>
 
-      {/* Menu */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-sm text-foreground">Menu</h3>
-          <a
-            href={`https://www.google.com/search?q=${encodeURIComponent(spot.name + " Singapore menu")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-[12px] text-primary hover:underline"
-          >
-            View Full Menu
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-        <div className="rounded-xl bg-card border border-border/40 divide-y divide-border/30 overflow-hidden">
-          {spot.menuHighlights.map((item) => (
-            <div key={item} className="px-3.5 py-2.5 text-[13px] text-foreground">
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Menu with Nutrition - Uber Eats style */}
+      <VendorMenu
+        spotName={spot.name}
+        address={spot.address}
+        menuHighlights={spot.menuHighlights}
+      />
 
       {/* Reviews */}
       <div>
