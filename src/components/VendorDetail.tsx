@@ -4,26 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VendorMenu } from "@/components/VendorMenu";
 
-interface NutritionItem {
-  dish: string;
-  nutrition: {
-    calories_kcal: number;
-    protein_g: number;
-    carbs_g: number;
-    fat_g: number;
-  };
-  confidence: string;
-  ingredients_detected?: string[];
-}
-
 interface VendorDetailProps {
   spot: FoodSpot;
   isFavorite: boolean;
   onToggleFavorite: (id: string) => void;
   onBack: () => void;
-  nutritionData: NutritionItem[] | null;
-  isAnalyzing: boolean;
-  onAnalyze: () => void;
 }
 
 export function VendorDetail({
