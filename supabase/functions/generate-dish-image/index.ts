@@ -59,8 +59,8 @@ serve(async (req) => {
       return jsonResponse({ error: "No dish name provided" }, 400);
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
       return jsonResponse({
         image_url: buildFallbackImage(dish_name, "service_unavailable"),
         source: "fallback",
