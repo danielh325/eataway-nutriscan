@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +44,7 @@ RULES:
 - Detect ALL 14 major allergens per dish
 - Use calibration examples to anchor estimates`;
 
-const ANALYSIS_MODELS = ["google/gemini-3-flash-preview", "google/gemini-2.5-flash-lite"];
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
 const EXTRACT_MENU_TOOL = {
   type: "function",
@@ -176,10 +175,10 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
+        JSON.stringify({ error: "Google Gemini API key not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -187,43 +186,47 @@ serve(async (req) => {
     const gatewayErrors: Array<{ model: string; status: number; body: string }> = [];
     let response: Response | null = null;
 
-    for (const model of ANALYSIS_MODELS) {
+    for (const model of GEMINI_MODELS) {
       console.log(`Menu analysis attempt with ${model}...`);
 
-      const attempt = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
+      // Use Google's OpenAI-compatible endpoint
+      const attempt = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `Analyze this menu image with ABSOLUTE COMPLETENESS. This is health-critical.
 
 MANDATORY: Extract EVERY SINGLE item on this menu — every dish, appetizer, starter, main, side, dessert, drink, combo, and special. Do NOT skip any section of the menu. Scan systematically from top to bottom, left to right, covering every column and section visible in the image.
 
 After your first extraction pass, do a SECOND pass to verify you haven't missed anything. Missing even one dish is a critical failure.
 
 Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.`,
-                },
-                {
-                  type: "image_url",
-                  image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` },
-                },
-              ],
-            },
-          ],
-          tools: [EXTRACT_MENU_TOOL],
-          tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
-        }),
-      });
+                  },
+                  {
+                    type: "image_url",
+                    image_url: { url: `data:${mimeType || "image/jpeg"};base64,${imageBase64}` },
+                  },
+                ],
+              },
+            ],
+            tools: [EXTRACT_MENU_TOOL],
+            tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
+          }),
+        }
+      );
 
       if (attempt.ok) {
         response = attempt;
@@ -236,24 +239,16 @@ Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE res
 
     if (!response) {
       const hadRateLimit = gatewayErrors.some((e) => e.status === 429);
-      const hadCreditsIssue = gatewayErrors.every((e) => e.status === 402);
 
       if (hadRateLimit) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. The free tier allows 15 requests/minute. Please try again in a moment." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      if (hadCreditsIssue) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
       console.error("AI error across fallback models:", gatewayErrors);
-      return new Response(JSON.stringify({ error: "Failed to analyze menu" }), {
+      return new Response(JSON.stringify({ error: "Failed to analyze menu. Check your Gemini API key." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
