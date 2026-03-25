@@ -1,5 +1,5 @@
 import { FoodSpot } from "@/data/types";
-import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation, Download } from "lucide-react";
+import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VendorMenu } from "@/components/VendorMenu";
@@ -16,48 +16,8 @@ export function VendorDetail({
   isFavorite,
   onToggleFavorite,
   onBack,
-  nutritionData,
-  isAnalyzing,
-  onAnalyze,
 }: VendorDetailProps) {
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
-
-  const handleExport = () => {
-    const exportData = {
-      vendor: {
-        name: spot.name,
-        description: spot.description,
-        categories: spot.categories,
-        rating: spot.rating,
-        reviewCount: spot.reviewCount,
-        priceRange: spot.priceRange,
-        address: spot.address,
-        hours: spot.hours,
-        phone: spot.phone,
-        image: spot.image,
-        lat: spot.lat,
-        lng: spot.lng,
-      },
-      menu: (nutritionData || []).map((item) => ({
-        dish_name: item.dish,
-        calories_kcal: item.nutrition.calories_kcal,
-        protein_g: item.nutrition.protein_g,
-        carbs_g: item.nutrition.carbs_g,
-        fat_g: item.nutrition.fat_g,
-        confidence: item.confidence,
-        ingredients: item.ingredients_detected || [],
-      })),
-      exported_at: new Date().toISOString(),
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${spot.name.replace(/[^a-zA-Z0-9]/g, "_")}_nutrition.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -131,91 +91,12 @@ export function VendorDetail({
         </Button>
       </a>
 
-      {/* Menu with Nutrition */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-foreground flex items-center gap-2">
-            <Utensils className="h-4 w-4 text-primary" />
-            Menu & Nutrition
-          </h3>
-          <div className="flex gap-2">
-            {nutritionData && (
-              <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={handleExport}>
-                <Download className="h-3 w-3 mr-1" />
-                Export
-              </Button>
-            )}
-            {!nutritionData && !isAnalyzing && (
-              <Button size="sm" className="rounded-lg text-xs" onClick={onAnalyze}>
-                Analyze Nutrition
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {isAnalyzing && (
-          <div className="flex items-center justify-center py-8 gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Analyzing menu items for nutrition...
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {nutritionData
-            ? nutritionData.map((item, i) => (
-                <div key={i} className="p-3 rounded-xl bg-card border border-border/40">
-                  <div className="flex items-start justify-between">
-                    <h4 className="font-medium text-sm text-foreground">{item.dish}</h4>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] ${
-                        item.confidence === "high"
-                          ? "border-green-500/30 text-green-600"
-                          : item.confidence === "medium"
-                          ? "border-yellow-500/30 text-yellow-600"
-                          : "border-red-500/30 text-red-600"
-                      }`}
-                    >
-                      {item.confidence}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 mt-2">
-                    <div className="text-center">
-                      <p className="text-xs font-bold text-foreground">{item.nutrition.calories_kcal}</p>
-                      <p className="text-[10px] text-muted-foreground">kcal</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs font-bold text-blue-600">{item.nutrition.protein_g}g</p>
-                      <p className="text-[10px] text-muted-foreground">protein</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs font-bold text-amber-600">{item.nutrition.carbs_g}g</p>
-                      <p className="text-[10px] text-muted-foreground">carbs</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs font-bold text-rose-600">{item.nutrition.fat_g}g</p>
-                      <p className="text-[10px] text-muted-foreground">fat</p>
-                    </div>
-                  </div>
-                  {item.ingredients_detected && item.ingredients_detected.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {item.ingredients_detected.slice(0, 5).map((ing, j) => (
-                        <span key={j} className="text-[10px] px-1.5 py-0.5 bg-secondary rounded-full text-muted-foreground">
-                          {ing}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
-            : !isAnalyzing &&
-              spot.menuHighlights.map((item, i) => (
-                <div key={i} className="px-3.5 py-2.5 rounded-xl bg-card border border-border/40 text-sm text-foreground">
-                  {item}
-                </div>
-              ))}
-        </div>
-      </div>
+      {/* Menu with Nutrition - Uber Eats style */}
+      <VendorMenu
+        spotName={spot.name}
+        address={spot.address}
+        menuHighlights={spot.menuHighlights}
+      />
 
       {/* Reviews */}
       <div>
