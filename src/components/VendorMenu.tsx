@@ -46,17 +46,30 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-  const fetchMenu = useCallback(async (forceRefresh = false) => {
+  const loadFromDB = useCallback(async () => {
+    const { data } = await supabase
+      .from("vendor_menu_items")
+      .select("*")
+      .eq("spot_name", spotName);
+    if (data && data.length > 0) {
+      setItems(data.map((item: any) => ({
+        ...item,
+        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+      })));
+      return true;
+    }
+    return false;
+  }, [spotName]);
+
+  const discoverMenu = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("discover-vendor-menu", {
-        body: { spotName, address, menuHighlights, forceRefresh },
+        body: { spotName, address, menuHighlights, forceRefresh: true },
       });
-
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
-
       const menuItems = (data?.items || []).map((item: any) => ({
         ...item,
         ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
