@@ -116,7 +116,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return (
       <div className="py-6 text-center space-y-3">
         <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => fetchMenu(true)} className="rounded-xl gap-2">
+        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="rounded-xl gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Try Again
         </Button>
       </div>
@@ -127,7 +127,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return (
       <div className="py-6 text-center">
         <p className="text-sm text-muted-foreground">No menu data available yet.</p>
-        <Button variant="outline" size="sm" onClick={() => fetchMenu(true)} className="mt-3 rounded-xl gap-2">
+        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="mt-3 rounded-xl gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Discover Menu
         </Button>
       </div>
@@ -145,7 +145,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => fetchMenu(true)}
+          onClick={() => discoverMenu()}
           className="text-xs text-muted-foreground hover:text-foreground rounded-lg h-8 gap-1"
         >
           <RefreshCw className="h-3 w-3" /> Refresh
