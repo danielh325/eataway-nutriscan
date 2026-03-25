@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,7 +50,6 @@ const VERIFY_TOOL = {
   },
 };
 
-// Shared tool schema for extraction
 const EXTRACT_MENU_TOOL = {
   type: "function",
   function: {
@@ -173,30 +171,28 @@ async function safeJsonFromResponse(response: Response): Promise<any | null> {
   }
 }
 
+async function callGemini(apiKey: string, model: string, messages: any[], tools?: any[], toolChoice?: any): Promise<Response> {
+  return fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      ...(tools ? { tools } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
+    }),
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // JWT validation
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     let body: any;
     try {
       body = await req.json();
@@ -217,72 +213,64 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
+        JSON.stringify({ error: "Google Gemini API key not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Refining ${dishes.length} dishes with GPT-5 ensemble + verification...`);
+    console.log(`Refining ${dishes.length} dishes with Gemini ensemble + verification...`);
 
     const rc = restaurant_context || {};
 
-    // ═══ Step 1: GPT-5 ensemble pass (re-analyze with image if provided) ═══
-    let gptDishes: any[] = [];
+    // ═══ Step 1: Second model pass (re-analyze with image if provided) ═══
+    let secondDishes: any[] = [];
 
     if (imageBase64 && mimeType) {
       try {
-        const gptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "openai/gpt-5",
-            messages: [
-              { role: "system", content: `You are a nutrition analyst. Analyze this menu image and extract nutrition for ALL dishes. Use ranges (e.g. "650-800"). ${FEW_SHOT_EXAMPLES}` },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: "Analyze every dish in this menu. Return structured nutrition with ranges. Call extract_menu_analysis." },
-                  { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-                ],
-              },
-            ],
-            tools: [EXTRACT_MENU_TOOL],
-            tool_choice: { type: "function", function: { name: "extract_menu_analysis" } },
-          }),
-        });
+        const secondResponse = await callGemini(
+          GEMINI_API_KEY,
+          "gemini-2.5-pro",
+          [
+            { role: "system", content: `You are a nutrition analyst. Analyze this menu image and extract nutrition for ALL dishes. Use ranges (e.g. "650-800"). ${FEW_SHOT_EXAMPLES}` },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Analyze every dish in this menu. Return structured nutrition with ranges. Call extract_menu_analysis." },
+                { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+              ],
+            },
+          ],
+          [EXTRACT_MENU_TOOL],
+          { type: "function", function: { name: "extract_menu_analysis" } }
+        );
 
-        if (gptResponse.ok) {
-          const gptData = await safeJsonFromResponse(gptResponse);
-          if (gptData) {
-            const gptParsed = extractParsed(gptData);
-            gptDishes = Array.isArray(gptParsed?.dishes) ? gptParsed.dishes : [];
-            console.log(`GPT-5 returned ${gptDishes.length} dishes`);
-          } else {
-            console.warn("GPT-5 returned an empty or invalid JSON payload");
+        if (secondResponse.ok) {
+          const secondData = await safeJsonFromResponse(secondResponse);
+          if (secondData) {
+            const secondParsed = extractParsed(secondData);
+            secondDishes = Array.isArray(secondParsed?.dishes) ? secondParsed.dishes : [];
+            console.log(`Gemini Pro returned ${secondDishes.length} dishes`);
           }
         } else {
-          const gptErr = await gptResponse.text();
-          console.warn("GPT-5 failed:", gptResponse.status, gptErr.slice(0, 180));
+          const errText = await secondResponse.text();
+          console.warn("Gemini Pro failed:", secondResponse.status, errText.slice(0, 180));
         }
       } catch (e: any) {
-        console.warn("GPT-5 ensemble error:", e?.message || e);
+        console.warn("Ensemble error:", e?.message || e);
       }
     }
 
-    // ═══ Step 2: Reconcile with GPT results ═══
+    // ═══ Step 2: Reconcile ═══
     let refinedDishes = [...dishes];
-    if (gptDishes.length > 0) {
-      const gptMap = new Map<string, any>();
-      for (const d of gptDishes) gptMap.set(d.dish?.toLowerCase(), d);
+    if (secondDishes.length > 0) {
+      const secondMap = new Map<string, any>();
+      for (const d of secondDishes) secondMap.set(d.dish?.toLowerCase(), d);
 
       refinedDishes = dishes.map((dish: any) => {
-        const match = gptMap.get(dish.dish?.toLowerCase());
+        const match = secondMap.get(dish.dish?.toLowerCase());
         if (!match?.nutrition || match.nutrition === "unavailable") return dish;
         if (!dish.nutrition || dish.nutrition === "unavailable") return dish;
 
@@ -299,44 +287,34 @@ serve(async (req) => {
           confidence_score: dish.confidence_score !== undefined && match.confidence_score !== undefined
             ? (dish.confidence_score + match.confidence_score) / 2
             : dish.confidence_score,
-          data_sources: [...new Set([...(dish.data_sources || []), ...(match.data_sources || []), "Ensemble (GPT-5)"])],
+          data_sources: [...new Set([...(dish.data_sources || []), ...(match.data_sources || []), "Ensemble (Gemini Pro)"])],
         };
       });
     }
 
-    // ═══ Step 3: Verification pass with Gemini Flash ═══
+    // ═══ Step 3: Verification pass ═══
     const dishSummaries = refinedDishes.map((d: any) => {
       if (!d.nutrition || d.nutrition === "unavailable") return `- ${d.dish}: unavailable`;
       return `- ${d.dish}: ${d.nutrition.calories_kcal} kcal, P:${d.nutrition.protein_g}g, C:${d.nutrition.carbs_g}g, F:${d.nutrition.fat_g}g, portion:${d.portion_size_g}g`;
     }).join("\n");
 
     try {
-      const verifyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: "You are a nutrition auditor. Verify and correct nutrition estimates. Only correct clear errors (>20% off)." },
-            {
-              role: "user",
-              content: `Verify these nutrition estimates:\n\nRestaurant: ${rc.type || "?"}, ${rc.cuisine || "?"}, ${rc.portion_style || "?"}\n\n${dishSummaries}\n\n${FEW_SHOT_EXAMPLES}\n\nFor each dish, check macro-calorie consistency (P*4+C*4+F*9≈total). Call verify_nutrition.`,
-            },
-          ],
-          tools: [VERIFY_TOOL],
-          tool_choice: { type: "function", function: { name: "verify_nutrition" } },
-        }),
-      });
+      const verifyResponse = await callGemini(
+        GEMINI_API_KEY,
+        "gemini-2.5-flash",
+        [
+          { role: "system", content: "You are a nutrition auditor. Verify and correct nutrition estimates. Only correct clear errors (>20% off)." },
+          {
+            role: "user",
+            content: `Verify these nutrition estimates:\n\nRestaurant: ${rc.type || "?"}, ${rc.cuisine || "?"}, ${rc.portion_style || "?"}\n\n${dishSummaries}\n\n${FEW_SHOT_EXAMPLES}\n\nFor each dish, check macro-calorie consistency (P*4+C*4+F*9≈total). Call verify_nutrition.`,
+          },
+        ],
+        [VERIFY_TOOL],
+        { type: "function", function: { name: "verify_nutrition" } }
+      );
 
       if (verifyResponse.ok) {
         const verifyData = await safeJsonFromResponse(verifyResponse);
-        if (!verifyData) {
-          console.warn("Verification returned an empty or invalid JSON payload");
-        }
-
         const verifyParsed = verifyData ? extractParsed(verifyData) : null;
         if (verifyParsed?.corrections) {
           let correctionCount = 0;
@@ -358,7 +336,7 @@ serve(async (req) => {
         }
       } else {
         const verifyErr = await verifyResponse.text();
-        console.warn("Verification request failed:", verifyResponse.status, verifyErr.slice(0, 180));
+        console.warn("Verification failed:", verifyResponse.status, verifyErr.slice(0, 180));
       }
     } catch (e: any) {
       console.warn("Verification failed (non-critical):", e?.message || e);
@@ -388,7 +366,7 @@ serve(async (req) => {
   } catch (error: any) {
     if (error?.status === 429) {
       return new Response(
-        JSON.stringify({ error: "Rate limit exceeded" }),
+        JSON.stringify({ error: "Rate limit exceeded. Free tier allows 15 req/min." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
