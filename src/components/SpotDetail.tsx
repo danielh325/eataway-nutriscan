@@ -4,6 +4,7 @@ import { Star, Heart, ArrowLeft, MapPin, Clock, Phone, Navigation, ExternalLink 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
+import { VendorMenu } from "@/components/VendorMenu";
 
 interface SpotDetailProps {
   spot: FoodSpot;
