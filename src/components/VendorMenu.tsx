@@ -84,8 +84,15 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   }, [spotName, address, menuHighlights]);
 
   useEffect(() => {
-    fetchMenu();
-  }, [fetchMenu]);
+    setLoading(true);
+    loadFromDB().then((found) => {
+      if (!found) {
+        discoverMenu();
+      } else {
+        setLoading(false);
+      }
+    });
+  }, [loadFromDB, discoverMenu]);
 
   const categories = ["All", ...CATEGORY_ORDER.filter((cat) => items.some((i) => i.category === cat))];
   const filtered = activeCategory === "All" ? items : items.filter((i) => i.category === activeCategory);
