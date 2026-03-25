@@ -1,5 +1,5 @@
 import { FoodSpot } from "@/data/types";
-import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation, ExternalLink, Utensils, Loader2, Download } from "lucide-react";
+import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation, ExternalLink, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
