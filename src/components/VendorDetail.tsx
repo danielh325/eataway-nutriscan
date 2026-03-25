@@ -1,7 +1,8 @@
 import { FoodSpot } from "@/data/types";
-import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation, ExternalLink, Download } from "lucide-react";
+import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { VendorMenu } from "@/components/VendorMenu";
 
 interface NutritionItem {
   dish: string;
