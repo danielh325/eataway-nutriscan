@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,20 +46,6 @@ serve(async (req) => {
   }
 
   try {
-    // JWT validation
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      return jsonResponse({ error: "Unauthorized" }, 401);
-    }
-
     let payload: { dish_name?: string; cooking_method?: string; ingredients?: string[] };
     try {
       payload = await req.json();
@@ -73,8 +59,8 @@ serve(async (req) => {
       return jsonResponse({ error: "No dish name provided" }, 400);
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
       return jsonResponse({
         image_url: buildFallbackImage(dish_name, "service_unavailable"),
         source: "fallback",
@@ -90,16 +76,15 @@ serve(async (req) => {
     console.log("Generating dish image for:", dish_name);
 
     for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          Authorization: `Bearer ${GEMINI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: "gemini-2.0-flash",
           messages: [{ role: "user", content: prompt }],
-          modalities: ["image", "text"],
         }),
       });
 

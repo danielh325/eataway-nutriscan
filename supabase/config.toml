@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.refine-menu]
 verify_jwt = false
+
+[functions.extract-menu-images]
+verify_jwt = false
+
+[functions.generate-dish-image]
+verify_jwt = false
