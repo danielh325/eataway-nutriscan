@@ -257,30 +257,69 @@ export type Database = {
       vendor_suggestions: {
         Row: {
           address: string
+          categories: string[] | null
           created_at: string
           cuisine: string | null
+          description: string | null
+          hours: string | null
           id: string
+          image: string | null
+          lat: number | null
+          lng: number | null
+          menu_image_url: string | null
           name: string
+          phone: string | null
+          place_id: string | null
+          price_range: string | null
+          rating: number | null
+          review_count: number | null
           status: string
           suggested_by: string | null
+          verified: boolean | null
         }
         Insert: {
           address: string
+          categories?: string[] | null
           created_at?: string
           cuisine?: string | null
+          description?: string | null
+          hours?: string | null
           id?: string
+          image?: string | null
+          lat?: number | null
+          lng?: number | null
+          menu_image_url?: string | null
           name: string
+          phone?: string | null
+          place_id?: string | null
+          price_range?: string | null
+          rating?: number | null
+          review_count?: number | null
           status?: string
           suggested_by?: string | null
+          verified?: boolean | null
         }
         Update: {
           address?: string
+          categories?: string[] | null
           created_at?: string
           cuisine?: string | null
+          description?: string | null
+          hours?: string | null
           id?: string
+          image?: string | null
+          lat?: number | null
+          lng?: number | null
+          menu_image_url?: string | null
           name?: string
+          phone?: string | null
+          place_id?: string | null
+          price_range?: string | null
+          rating?: number | null
+          review_count?: number | null
           status?: string
           suggested_by?: string | null
+          verified?: boolean | null
         }
         Relationships: []
       }
