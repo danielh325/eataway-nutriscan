@@ -34,7 +34,7 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
   try {
     const base64 = await fileToBase64(file);
     
-    const { data, error } = await supabase.functions.invoke("analyze-menu", {
+    const { data, error } = await supabase.functions.invoke("analyze-menu-v2", {
       body: {
         imageBase64: base64,
         mimeType: file.type,
