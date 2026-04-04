@@ -658,7 +658,7 @@ serve(async (req) => {
         restaurant_context: ensemble.restaurant_context,
         pipeline: {
           models_used: ["gemini-2.5-pro", "gemini-2.5-flash"],
-          databases_queried: ["USDA FoodData Central", "Open Food Facts", "CalorieNinjas"],
+          databases_queried: ["USDA FoodData Central", "Open Food Facts", "Lovable AI Verification"],
           model_agreement: ensemble.model_agreement,
           dishes_cross_referenced: enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length,
           total_dishes: enrichedDishes.length,
