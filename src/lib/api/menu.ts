@@ -11,6 +11,13 @@ interface RestaurantContextData {
 export interface AnalyzeMenuResponse {
   dishes?: DishData[];
   restaurant_context?: RestaurantContextData | null;
+  pipeline?: {
+    models_used: string[];
+    databases_queried: string[];
+    model_agreement: number;
+    dishes_cross_referenced: number;
+    total_dishes: number;
+  };
   error?: string;
   imageBase64?: string;
   mimeType?: string;
@@ -27,7 +34,7 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
   try {
     const base64 = await fileToBase64(file);
     
-    const { data, error } = await supabase.functions.invoke("analyze-menu", {
+    const { data, error } = await supabase.functions.invoke("analyze-menu-v2", {
       body: {
         imageBase64: base64,
         mimeType: file.type,
@@ -51,6 +58,7 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
     return {
       dishes: data.dishes,
       restaurant_context: data.restaurant_context || null,
+      pipeline: data.pipeline || null,
       imageBase64: base64,
       mimeType: file.type,
     };
