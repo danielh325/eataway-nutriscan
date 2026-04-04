@@ -11,6 +11,13 @@ interface RestaurantContextData {
 export interface AnalyzeMenuResponse {
   dishes?: DishData[];
   restaurant_context?: RestaurantContextData | null;
+  pipeline?: {
+    models_used: string[];
+    databases_queried: string[];
+    model_agreement: number;
+    dishes_cross_referenced: number;
+    total_dishes: number;
+  };
   error?: string;
   imageBase64?: string;
   mimeType?: string;
