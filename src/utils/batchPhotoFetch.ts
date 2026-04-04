@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { foodSpots } from "@/data/foodSpots";
 
 // Call this once to populate the DB with all Google Places photos
-export async function triggerBatchPhotoFetch(adminPassword?: string) {
+export async function triggerBatchPhotoFetch() {
   const spotInfos = foodSpots.map(s => ({
     name: s.name,
     address: s.address,
@@ -20,7 +20,7 @@ export async function triggerBatchPhotoFetch(adminPassword?: string) {
     
     try {
       const { data, error } = await supabase.functions.invoke("batch-fetch-photos", {
-        body: { spotInfos: chunk, adminPassword },
+        body: { spotInfos: chunk },
       });
 
       if (error) {

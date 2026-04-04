@@ -1,23 +1,22 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { foodSpots as hardcodedSpots } from "@/data/foodSpots";
 import { triggerBatchPhotoFetch } from "@/utils/batchPhotoFetch";
 import { invalidatePlacesPhotoCache } from "@/hooks/usePlacesPhoto";
 import {
   ArrowLeft, RefreshCw, Check, X, Image, Pencil, Trash2,
-  Eye, EyeOff, Lock, CheckCircle2, Circle
+  Eye, EyeOff, Lock, CheckCircle2, Circle, LogIn
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const ADMIN_PASSWORD = "eataway2025";
 type SpotStatus = { reviewed: boolean; hidden: boolean };
 
 export default function Admin() {
   const navigate = useNavigate();
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
+  const { user, loading: authLoading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkingRole, setCheckingRole] = useState(true);
   const [actionError, setActionError] = useState("");
 
   // Photos
@@ -33,17 +32,33 @@ export default function Admin() {
   const [statuses, setStatuses] = useState<Map<string, SpotStatus>>(new Map());
   const [reviewFilter, setReviewFilter] = useState<"all" | "pending" | "reviewed">("pending");
 
-  const handleLogin = () => {
-    const normalized = passwordInput.trim();
-    if (normalized === ADMIN_PASSWORD) {
-      setIsAuthed(true);
-      setAdminPassword(normalized);
-      setPasswordInput("");
-      setLoginError("");
+  // Check admin role
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setIsAdmin(false);
+      setCheckingRole(false);
       return;
     }
-    setLoginError("Incorrect password. Please try again.");
-  };
+    const checkRole = async () => {
+      const { data } = await supabase.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
+      });
+      setIsAdmin(Boolean(data));
+      setCheckingRole(false);
+    };
+    checkRole();
+  }, [user, authLoading]);
+
+  const runAdminAction = useCallback(async (payload: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("admin-photo-actions", {
+      body: payload,
+    });
+
+    if (error) throw new Error(error.message || "Admin action failed");
+    if ((data as any)?.error) throw new Error((data as any).error);
+  }, []);
 
   const loadPhotos = useCallback(async () => {
     setPhotoLoading(true);
@@ -61,37 +76,20 @@ export default function Admin() {
     setStatuses(map);
   }, []);
 
-  const runAdminAction = useCallback(async (payload: Record<string, unknown>) => {
-    const { data, error } = await supabase.functions.invoke("admin-photo-actions", {
-      body: {
-        adminPassword,
-        ...payload,
-      },
-    });
-
-    if (error) throw new Error(error.message || "Admin action failed");
-    if ((data as any)?.error) throw new Error((data as any).error);
-  }, [adminPassword]);
-
   useEffect(() => {
-    if (!isAuthed) return;
+    if (isAdmin !== true) return;
     document.body.style.overflow = "auto";
     loadPhotos();
     loadStatuses();
     return () => { document.body.style.overflow = "hidden"; };
-  }, [isAuthed, loadPhotos, loadStatuses]);
+  }, [isAdmin, loadPhotos, loadStatuses]);
 
   const handleBatchFetch = async () => {
-    if (!adminPassword) {
-      setFetchProgress("Admin session expired. Please reload and log in again.");
-      return;
-    }
-
     setFetching(true);
     setFetchProgress("Starting batch fetch...");
     setActionError("");
     try {
-      const result = await triggerBatchPhotoFetch(adminPassword);
+      const result = await triggerBatchPhotoFetch();
       setFetchProgress(`Done! ${result.totalFetched} new, ${result.totalCached} cached`);
       invalidatePlacesPhotoCache();
       await loadPhotos();
@@ -179,7 +177,20 @@ export default function Admin() {
   const reviewedCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.reviewed).length;
   const hiddenCount = hardcodedSpots.filter((s) => statuses.get(s.name)?.hidden).length;
 
-  if (!isAuthed) {
+  // Loading state
+  if (authLoading || checkingRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
+          <p className="text-sm" style={{ color: "#6b7280" }}>Checking access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
         <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
@@ -187,31 +198,36 @@ export default function Admin() {
             <Lock className="w-6 h-6" style={{ color: "#dc2626" }} />
           </div>
           <h1 className="text-lg font-bold mb-2">Admin Access</h1>
-          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Enter the admin password to continue.</p>
-          <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
-            <input
-              type="password"
-              value={passwordInput}
-                onChange={(e) => {
-                  setPasswordInput(e.target.value);
-                  if (loginError) setLoginError("");
-                }}
-              placeholder="Password"
-              className="w-full px-3 py-2 rounded-lg text-sm mb-3"
-              style={{ border: "1px solid #d1d5db" }}
-              autoFocus
-            />
-              {loginError && (
-                <p className="text-xs mb-3" style={{ color: "#dc2626" }}>{loginError}</p>
-              )}
-            <button
-              type="submit"
-              className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
-              style={{ background: "#2563eb" }}
-            >
-              Enter
-            </button>
-          </form>
+          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Please sign in with an admin account to access the dashboard.</p>
+          <button
+            onClick={() => navigate("/")}
+            className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-2"
+            style={{ background: "#2563eb" }}
+          >
+            <LogIn className="w-4 h-4" /> Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in but not admin
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f9fafb", color: "#111827" }}>
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb" }} className="rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: "#fee2e2" }}>
+            <Lock className="w-6 h-6" style={{ color: "#dc2626" }} />
+          </div>
+          <h1 className="text-lg font-bold mb-2">Access Denied</h1>
+          <p className="text-sm mb-4" style={{ color: "#6b7280" }}>Your account does not have admin privileges.</p>
+          <button
+            onClick={() => navigate("/")}
+            className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: "#2563eb" }}
+          >
+            Return Home
+          </button>
         </div>
       </div>
     );
