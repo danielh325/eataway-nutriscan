@@ -58,6 +58,7 @@ export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
     return {
       dishes: data.dishes,
       restaurant_context: data.restaurant_context || null,
+      pipeline: data.pipeline || null,
       imageBase64: base64,
       mimeType: file.type,
     };
