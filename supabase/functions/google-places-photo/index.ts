@@ -5,6 +5,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+/**
+ * Resolve a Google Places Photo API URL to its final CDN URL (no API key).
+ */
+async function resolvePhotoUrl(photoRef: string, apiKey: string, maxWidth = 400): Promise<string | null> {
+  try {
+    const googleUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photoreference=${photoRef}&key=${apiKey}`;
+    const res = await fetch(googleUrl, { redirect: "follow" });
+    if (res.ok || res.status === 302) {
+      return res.url;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -69,9 +85,8 @@ Deno.serve(async (req) => {
     }
 
     const photoRef = candidate?.photos?.[0]?.photo_reference;
-    const photoUrl = photoRef
-      ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoRef}&key=${apiKey}`
-      : null;
+    // Resolve to final CDN URL (no API key exposed)
+    const photoUrl = photoRef ? await resolvePhotoUrl(photoRef, apiKey) : null;
 
     if (persist && spotName) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -88,7 +103,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Error:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
