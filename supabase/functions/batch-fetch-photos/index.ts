@@ -5,8 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const DEFAULT_ADMIN_PASSWORD = 'eataway2025';
-
 async function isAuthenticatedAdmin(authHeader: string): Promise<boolean> {
   try {
     const anonClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -30,6 +28,24 @@ async function isAuthenticatedAdmin(authHeader: string): Promise<boolean> {
     return Boolean(roleData);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Resolve a Google Places Photo API URL to its final CDN URL (no API key).
+ * Google redirects to lh3.googleusercontent.com — we store that instead.
+ */
+async function resolvePhotoUrl(photoRef: string, apiKey: string, maxWidth = 800): Promise<string | null> {
+  try {
+    const googleUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photoreference=${photoRef}&key=${apiKey}`;
+    const res = await fetch(googleUrl, { redirect: "follow" });
+    if (res.ok || res.status === 302) {
+      // After following redirects, res.url is the final CDN URL
+      return res.url;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -71,7 +87,6 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
       const textData = await textRes.json();
 
       if (textData.status !== 'OK' || !textData.results?.length) {
-        console.log(`No results for query: "${searchQuery}" (status: ${textData.status})`);
         continue;
       }
 
@@ -93,7 +108,8 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
 
         const photoRef = candidate.photos[0].photo_reference;
         console.log(`✅ Matched "${spotInfo.name}" -> "${matchedName}" via "${searchQuery}"`);
-        return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${apiKey}`;
+        // Resolve to final CDN URL (no API key exposed)
+        return await resolvePhotoUrl(photoRef, apiKey);
       }
     }
 
@@ -112,7 +128,7 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
         if (isFoodPlace) {
           const photoRef = candidate.photos[0].photo_reference;
           console.log(`✅ Last-resort match "${spotInfo.name}" -> "${candidate.name}" (food type)`);
-          return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${apiKey}`;
+          return await resolvePhotoUrl(photoRef, apiKey);
         }
       }
     }
@@ -132,18 +148,14 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { spotNames, spotInfos, clearAll, adminPassword } = body;
+    const { spotNames, spotInfos, clearAll } = body;
 
-    const configuredPassword = Deno.env.get('ADMIN_PASSWORD') ?? DEFAULT_ADMIN_PASSWORD;
-    const passwordAuthorized = typeof adminPassword === 'string' && adminPassword === configuredPassword;
-
-    if (!passwordAuthorized) {
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ') || !(await isAuthenticatedAdmin(authHeader))) {
-        return new Response(JSON.stringify({ error: 'Admin access required' }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    // Auth: require JWT + admin role
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ') || !(await isAuthenticatedAdmin(authHeader))) {
+      return new Response(JSON.stringify({ error: 'Admin access required' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -227,7 +239,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Error:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
