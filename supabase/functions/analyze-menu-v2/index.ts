@@ -545,18 +545,18 @@ serve(async (req) => {
     console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes, agreement: ${(ensemble.model_agreement * 100).toFixed(0)}%`);
 
     // ─── STAGE 2: Cross-reference with external databases ─────────────
-    console.log("Stage 2: Cross-referencing with USDA + OpenFoodFacts + CalorieNinjas...");
+    console.log("Stage 2: Cross-referencing with USDA + OpenFoodFacts + Lovable AI...");
 
     const enrichedDishes = await Promise.all(
       ensemble.dishes.map(async (dish: any) => {
         const searchTerm = dish.search_term || dish.dish;
         const portionG = dish.portion_size_g || 200;
 
-        // Query all 3 databases in parallel
-        const [usdaResult, offResult, cnResult] = await Promise.allSettled([
+        // Query all 3 sources in parallel
+        const [usdaResult, offResult, aiResult] = await Promise.allSettled([
           queryUSDA(searchTerm),
           queryOpenFoodFacts(searchTerm),
-          queryCalorieNinjas(`${portionG}g ${searchTerm}`),
+          queryLovableAI(searchTerm, portionG),
         ]);
 
         const sources: NutritionSource[] = [];
@@ -577,11 +577,11 @@ serve(async (req) => {
           });
         }
 
-        if (cnResult.status === "fulfilled" && cnResult.value) {
+        if (aiResult.status === "fulfilled" && aiResult.value) {
           sources.push({
-            source: "CalorieNinjas NLP",
-            per100g: false, // already per serving
-            data: extractCNNutrition(cnResult.value),
+            source: "Lovable AI Verification",
+            per100g: false,
+            data: aiResult.value,
           });
         }
 
