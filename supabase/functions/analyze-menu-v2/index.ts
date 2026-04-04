@@ -245,59 +245,46 @@ function extractOFFNutrition(result: OFFResult): Record<string, number> {
   return out;
 }
 
-// ─── CalorieNinjas API (free tier, text-based NLP nutrition) ────────────────
+// ─── Lovable AI Nutrition Verification (free, no API key) ──────────────────
 
-interface CalorieNinjasResult {
-  name: string;
-  calories: number;
-  protein_g: number;
-  carbohydrates_total_g: number;
-  fat_total_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-  sugar_g: number;
-  serving_size_g: number;
-}
+async function queryLovableAI(dishName: string, portionG: number): Promise<Record<string, number> | null> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !supabaseKey) return null;
 
-async function queryCalorieNinjas(query: string): Promise<CalorieNinjasResult | null> {
-  const apiKey = Deno.env.get("CALORIE_NINJAS_API_KEY");
-  if (!apiKey) return null;
   try {
-    const resp = await fetch(`https://api.calorieninjas.com/v1/nutrition?query=${encodeURIComponent(query)}`, {
-      headers: { "X-Api-Key": apiKey },
+    const resp = await fetch(`${supabaseUrl}/functions/v1/ai`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "system",
+            content: "You are a nutrition database. Return ONLY a JSON object with numeric values for a single serving. Keys: calories_kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, sugar_g. No explanation.",
+          },
+          {
+            role: "user",
+            content: `Nutrition facts for ${portionG}g of: ${dishName}`,
+          },
+        ],
+        model: "google/gemini-2.5-flash-lite",
+      }),
     });
     if (!resp.ok) return null;
     const data = await resp.json();
-    const items = data?.items;
-    if (!Array.isArray(items) || items.length === 0) return null;
-    const item = items[0];
-    return {
-      name: item.name,
-      calories: item.calories,
-      protein_g: item.protein_g,
-      carbohydrates_total_g: item.carbohydrates_total_g,
-      fat_total_g: item.fat_total_g,
-      fiber_g: item.fiber_g,
-      sodium_mg: item.sodium_mg,
-      sugar_g: item.sugar_g,
-      serving_size_g: item.serving_size_g,
-    };
+    const content = data?.choices?.[0]?.message?.content || "";
+    let cleaned = content.trim();
+    if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed?.calories_kcal === "number") return parsed;
+    return null;
   } catch (e) {
-    console.warn("CalorieNinjas query failed:", e);
+    console.warn("Lovable AI nutrition query failed:", e);
     return null;
   }
-}
-
-function extractCNNutrition(r: CalorieNinjasResult): Record<string, number> {
-  return {
-    calories_kcal: r.calories,
-    protein_g: r.protein_g,
-    carbs_g: r.carbohydrates_total_g,
-    fat_g: r.fat_total_g,
-    fiber_g: r.fiber_g,
-    sodium_mg: r.sodium_mg,
-    sugar_g: r.sugar_g,
-  };
 }
 
 // ─── ENSEMBLE MERGE ─────────────────────────────────────────────────────────
