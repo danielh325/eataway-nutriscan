@@ -270,7 +270,7 @@ async function queryLovableAI(dishName: string, portionG: number): Promise<Recor
             content: `Nutrition facts for ${portionG}g of: ${dishName}`,
           },
         ],
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-3-flash-preview",
       }),
     });
     if (!resp.ok) return null;
