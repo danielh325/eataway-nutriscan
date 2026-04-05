@@ -41,14 +41,14 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
     const run = async () => {
       // Step 1: Try to extract real photos from the menu image
-      const menuMatches: Record<string, string> = {};
+      const menuMatches: Record<string, { url: string; bbox?: MenuImageBBox | null }> = {};
       if (menuImageBase64 && menuMimeType) {
         try {
           const dishNames = dishes.map(d => d.dish);
           const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
           for (const m of matches) {
             if (m.image_url && m.dish_name) {
-              menuMatches[m.dish_name.toLowerCase()] = m.image_url;
+              menuMatches[m.dish_name.toLowerCase()] = { url: m.image_url, bbox: m.bbox };
             }
           }
           console.log(`Menu extraction found ${Object.keys(menuMatches).length} dish photos`);
