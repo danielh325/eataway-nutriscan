@@ -29,6 +29,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
 
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
+  const [imageBBoxes, setImageBBoxes] = useState<Record<number, MenuImageBBox>>({});
   const abortRef = useRef(false);
   const [activeGenerations, setActiveGenerations] = useState<Set<number>>(new Set());
 
