@@ -3,7 +3,7 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractMenuImages } from "@/lib/api/menu";
+import { extractMenuImages, MenuImageBBox } from "@/lib/api/menu";
 import { Button } from "@/components/ui/button";
 
 interface RestaurantContextData {
@@ -29,6 +29,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
   const highConfidence = dishes.filter((d) => d.confidence === "high").length;
 
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
+  const [imageBBoxes, setImageBBoxes] = useState<Record<number, MenuImageBBox>>({});
   const abortRef = useRef(false);
   const [activeGenerations, setActiveGenerations] = useState<Set<number>>(new Set());
 
@@ -40,14 +41,14 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
 
     const run = async () => {
       // Step 1: Try to extract real photos from the menu image
-      const menuMatches: Record<string, string> = {};
+      const menuMatches: Record<string, { url: string; bbox?: MenuImageBBox | null }> = {};
       if (menuImageBase64 && menuMimeType) {
         try {
           const dishNames = dishes.map(d => d.dish);
           const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
           for (const m of matches) {
             if (m.image_url && m.dish_name) {
-              menuMatches[m.dish_name.toLowerCase()] = m.image_url;
+              menuMatches[m.dish_name.toLowerCase()] = { url: m.image_url, bbox: m.bbox };
             }
           }
           console.log(`Menu extraction found ${Object.keys(menuMatches).length} dish photos`);
@@ -59,12 +60,17 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       // Apply menu-extracted images immediately
       if (!cancelled && !abortRef.current) {
         const extracted: Record<number, string> = {};
+        const bboxes: Record<number, MenuImageBBox> = {};
         dishes.forEach((d, i) => {
           const match = menuMatches[d.dish.toLowerCase()];
-          if (match) extracted[i] = match;
+          if (match) {
+            extracted[i] = match.url;
+            if (match.bbox) bboxes[i] = match.bbox;
+          }
         });
         if (Object.keys(extracted).length > 0) {
           setGeneratedImages(prev => ({ ...prev, ...extracted }));
+          setImageBBoxes(prev => ({ ...prev, ...bboxes }));
         }
       }
 
@@ -230,6 +236,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
               onSave={onSaveDish}
               isLoggedIn={isLoggedIn}
               externalImage={generatedImages[index]}
+              imageBBox={imageBBoxes[index]}
               imageLoading={activeGenerations.has(index)}
               imageQueued={!dish.dish_image_url && !generatedImages[index] && !activeGenerations.has(index) && activeGenerations.size > 0}
             />

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2, ShieldAlert } from "lucide-react";
+import type { MenuImageBBox } from "@/lib/api/menu";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
@@ -61,6 +62,7 @@ interface DishCardProps {
   onSave?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
   isLoggedIn?: boolean;
   externalImage?: string;
+  imageBBox?: MenuImageBBox;
   imageLoading?: boolean;
   imageQueued?: boolean;
 }
@@ -85,7 +87,7 @@ const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngred
   return null;
 };
 
-export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageLoading: externalImageLoading, imageQueued }: DishCardProps) => {
+export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageBBox, imageLoading: externalImageLoading, imageQueued }: DishCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
@@ -174,12 +176,27 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
 
       {/* Dish Image */}
       {generatedImage && (
-        <div className="w-full h-40 md:h-48 overflow-hidden">
-          <img
-            src={generatedImage}
-            alt={dish.dish}
-            className="w-full h-full object-cover"
-          />
+        <div className="w-full h-40 md:h-48 overflow-hidden relative">
+          {imageBBox ? (
+            <img
+              src={generatedImage}
+              alt={dish.dish}
+              className="absolute"
+              style={{
+                left: `${-imageBBox.x}%`,
+                top: `${-imageBBox.y}%`,
+                width: `${100 / (imageBBox.width / 100)}%`,
+                height: `${100 / (imageBBox.height / 100)}%`,
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <img
+              src={generatedImage}
+              alt={dish.dish}
+              className="w-full h-full object-cover"
+            />
+          )}
         </div>
       )}
       {imageLoading && !generatedImage && (
