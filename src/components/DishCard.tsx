@@ -87,7 +87,7 @@ const findIngredientNutrition = (name: string, perIngr: Record<string, PerIngred
   return null;
 };
 
-export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageLoading: externalImageLoading, imageQueued }: DishCardProps) => {
+export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, imageBBox, imageLoading: externalImageLoading, imageQueued }: DishCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
   const [removedIngredients, setRemovedIngredients] = useState<Set<string>>(new Set());
