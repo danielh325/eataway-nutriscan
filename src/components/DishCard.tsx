@@ -176,12 +176,27 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
 
       {/* Dish Image */}
       {generatedImage && (
-        <div className="w-full h-40 md:h-48 overflow-hidden">
-          <img
-            src={generatedImage}
-            alt={dish.dish}
-            className="w-full h-full object-cover"
-          />
+        <div className="w-full h-40 md:h-48 overflow-hidden relative">
+          {imageBBox ? (
+            <img
+              src={generatedImage}
+              alt={dish.dish}
+              className="absolute"
+              style={{
+                left: `${-imageBBox.x}%`,
+                top: `${-imageBBox.y}%`,
+                width: `${100 / (imageBBox.width / 100)}%`,
+                height: `${100 / (imageBBox.height / 100)}%`,
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <img
+              src={generatedImage}
+              alt={dish.dish}
+              className="w-full h-full object-cover"
+            />
+          )}
         </div>
       )}
       {imageLoading && !generatedImage && (
