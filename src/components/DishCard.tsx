@@ -62,6 +62,7 @@ interface DishCardProps {
   onSave?: (dish: DishData, calories: number, protein: number, carbs: number, fat: number, portionMultiplier: number) => void;
   isLoggedIn?: boolean;
   externalImage?: string;
+  imageBBox?: MenuImageBBox;
   imageLoading?: boolean;
   imageQueued?: boolean;
 }
