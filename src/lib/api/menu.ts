@@ -23,11 +23,19 @@ export interface AnalyzeMenuResponse {
   mimeType?: string;
 }
 
+export interface MenuImageBBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface MenuImageMatch {
   dish_name: string;
   image_url: string;
   food_description: string;
   match_confidence: number;
+  bbox?: MenuImageBBox | null;
 }
 
 export async function analyzeMenu(file: File): Promise<AnalyzeMenuResponse> {
