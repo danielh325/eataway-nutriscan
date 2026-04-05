@@ -429,8 +429,8 @@ async function runEnsemble(
   mimeType: string
 ): Promise<{ dishes: any[]; restaurant_context: any; model_agreement: number }> {
   const [proResult, flashResult] = await Promise.allSettled([
-    callGemini("gemini-2.5-pro", apiKey, imageBase64, mimeType),
-    callGemini("gemini-2.5-flash", apiKey, imageBase64, mimeType),
+    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType),
+    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType),
   ]);
 
   const proData = proResult.status === "fulfilled" && !proResult.value?.error ? proResult.value : null;
