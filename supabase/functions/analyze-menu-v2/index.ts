@@ -270,7 +270,7 @@ async function queryLovableAI(dishName: string, portionG: number): Promise<Recor
             content: `Nutrition facts for ${portionG}g of: ${dishName}`,
           },
         ],
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-3-flash-preview",
       }),
     });
     if (!resp.ok) return null;
@@ -429,8 +429,8 @@ async function runEnsemble(
   mimeType: string
 ): Promise<{ dishes: any[]; restaurant_context: any; model_agreement: number }> {
   const [proResult, flashResult] = await Promise.allSettled([
-    callGemini("gemini-2.5-pro", apiKey, imageBase64, mimeType),
-    callGemini("gemini-2.5-flash", apiKey, imageBase64, mimeType),
+    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType),
+    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType),
   ]);
 
   const proData = proResult.status === "fulfilled" && !proResult.value?.error ? proResult.value : null;
@@ -657,7 +657,7 @@ serve(async (req) => {
         dishes: enrichedDishes,
         restaurant_context: ensemble.restaurant_context,
         pipeline: {
-          models_used: ["gemini-2.5-pro", "gemini-2.5-flash"],
+          models_used: ["gemini-3.1-pro-preview", "gemini-3-flash-preview"],
           databases_queried: ["USDA FoodData Central", "Open Food Facts", "Lovable AI Verification"],
           model_agreement: ensemble.model_agreement,
           dishes_cross_referenced: enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length,
