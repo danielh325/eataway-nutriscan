@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Database, AlertCircle, AlertTriangle, SlidersHorizontal, Save, BookOpen, ShieldCheck, ImageIcon, Loader2, ShieldAlert } from "lucide-react";
+import type { MenuImageBBox } from "@/lib/api/menu";
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { NutritionBar } from "./NutritionBar";
