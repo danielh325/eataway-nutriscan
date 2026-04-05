@@ -60,12 +60,17 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       // Apply menu-extracted images immediately
       if (!cancelled && !abortRef.current) {
         const extracted: Record<number, string> = {};
+        const bboxes: Record<number, MenuImageBBox> = {};
         dishes.forEach((d, i) => {
           const match = menuMatches[d.dish.toLowerCase()];
-          if (match) extracted[i] = match;
+          if (match) {
+            extracted[i] = match.url;
+            if (match.bbox) bboxes[i] = match.bbox;
+          }
         });
         if (Object.keys(extracted).length > 0) {
           setGeneratedImages(prev => ({ ...prev, ...extracted }));
+          setImageBBoxes(prev => ({ ...prev, ...bboxes }));
         }
       }
 
