@@ -10,7 +10,10 @@ interface RecommendationCardProps {
 }
 
 export default function RecommendationCard({ spot, isFavorite, onToggleFavorite, onSelect }: RecommendationCardProps) {
-  const imageUrl = usePlacesPhoto(spot.name, spot.image);
+  const imageUrl = usePlacesPhoto(spot.name, spot.image, {
+    address: spot.address,
+    categories: spot.categories,
+  });
 
   return (
     <div
