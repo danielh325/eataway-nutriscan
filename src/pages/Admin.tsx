@@ -84,13 +84,18 @@ export default function Admin() {
     return () => { document.body.style.overflow = "hidden"; };
   }, [isAdmin, loadPhotos, loadStatuses]);
 
-  const handleBatchFetch = async () => {
+  const handleBatchFetch = async (refresh = false) => {
+    if (refresh && !confirm("Smart-refresh ALL vendor photos? This will re-pick the best photo from Google for every vendor (replaces existing). Takes ~2-3 mins.")) return;
     setFetching(true);
-    setFetchProgress("Starting batch fetch...");
+    setFetchProgress(refresh ? "Smart-refreshing all photos..." : "Fetching missing photos...");
     setActionError("");
     try {
-      const result = await triggerBatchPhotoFetch();
-      setFetchProgress(`Done! ${result.totalFetched} new, ${result.totalCached} cached`);
+      const result = await triggerBatchPhotoFetch(refresh);
+      setFetchProgress(
+        refresh
+          ? `Done! Refreshed ${result.totalFetched} photos (${result.totalFailed} failed)`
+          : `Done! ${result.totalFetched} new, ${result.totalCached} cached`
+      );
       invalidatePlacesPhotoCache();
       await loadPhotos();
     } catch (err: any) {
@@ -262,11 +267,18 @@ export default function Admin() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <button onClick={handleBatchFetch} disabled={fetching}
+          <button onClick={() => handleBatchFetch(false)} disabled={fetching}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
             style={{ background: fetching ? "#93c5fd" : "#2563eb" }}>
             <RefreshCw className={`w-4 h-4 ${fetching ? "animate-spin" : ""}`} />
-            {fetching ? "Fetching..." : "Batch Fetch All from Google"}
+            {fetching ? "Fetching..." : "Fetch Missing Photos"}
+          </button>
+          <button onClick={() => handleBatchFetch(true)} disabled={fetching}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: fetching ? "#c4b5fd" : "#7c3aed" }}
+            title="Re-pick the best photo from Google for every vendor (replaces existing photos with smart-scored picks)">
+            <RefreshCw className={`w-4 h-4 ${fetching ? "animate-spin" : ""}`} />
+            🎯 Smart Refresh All
           </button>
           {fetchProgress && <span className="text-sm" style={{ color: "#6b7280" }}>{fetchProgress}</span>}
           {actionError && <span className="text-sm" style={{ color: "#dc2626" }}>{actionError}</span>}
