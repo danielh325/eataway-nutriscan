@@ -7,8 +7,8 @@ interface DishOrderLinksProps {
 }
 
 /**
- * Per-dish order chips. Bigger, glassmorphic, brand-coloured.
- * Tapping searches Grab/Foodpanda for "{vendor} {dish}".
+ * Per-dish order chips. Bigger glassmorphic buttons.
+ * Grab link goes to vendor (Grab can't search dish-level), Foodpanda gets vendor + dish.
  */
 export function DishOrderLinks({ spotName, dishName }: DishOrderLinksProps) {
   const links = buildDishDeliveryLinks(spotName, dishName);
@@ -26,7 +26,7 @@ export function DishOrderLinks({ spotName, dishName }: DishOrderLinksProps) {
           rel="noopener noreferrer"
           onClick={stop}
           className="group relative overflow-hidden inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#00B14F] hover:bg-[#009A45] active:scale-[0.97] text-white text-xs font-bold transition-all shadow-sm hover:shadow-md"
-          aria-label={`Order ${dishName} on GrabFood`}
+          aria-label={`Find ${spotName} on GrabFood`}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/10 pointer-events-none" />
           <div className="relative h-5 w-5 rounded-md bg-white/20 backdrop-blur border border-white/20 flex items-center justify-center">
@@ -43,7 +43,7 @@ export function DishOrderLinks({ spotName, dishName }: DishOrderLinksProps) {
           rel="noopener noreferrer"
           onClick={stop}
           className="group relative overflow-hidden inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-[#D70F64] hover:bg-[#B80B53] active:scale-[0.97] text-white text-xs font-bold transition-all shadow-sm hover:shadow-md"
-          aria-label={`Order ${dishName} on foodpanda`}
+          aria-label={`Find ${dishName} at ${spotName} on foodpanda`}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/10 pointer-events-none" />
           <div className="relative h-5 w-5 rounded-md bg-white/20 backdrop-blur border border-white/20 flex items-center justify-center">

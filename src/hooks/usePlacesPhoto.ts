@@ -41,7 +41,8 @@ export async function getPlacesPhotoCache(): Promise<Map<string, string>> {
 }
 
 export function usePlacesPhoto(storeName: string, fallbackImage: string): string {
-  const [photoUrl, setPhotoUrl] = useState("");
+  // Initialise with fallback so first paint is never empty
+  const [photoUrl, setPhotoUrl] = useState(fallbackImage);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,13 +54,15 @@ export function usePlacesPhoto(storeName: string, fallbackImage: string): string
       const cached = dbCache?.get(storeName);
       if (cached) {
         setPhotoUrl(cached);
+      } else {
+        // Keep showing the fallback when no DB photo exists
+        setPhotoUrl(fallbackImage);
       }
-      // No auto-fetch — use admin dashboard to batch fetch
     };
 
     load();
     return () => { cancelled = true; };
-  }, [storeName]);
+  }, [storeName, fallbackImage]);
 
   return photoUrl || fallbackImage;
 }
