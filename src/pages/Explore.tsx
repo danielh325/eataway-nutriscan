@@ -88,6 +88,11 @@ const Explore = () => {
     return sorted.slice(0, 5);
   }, [viewportSpots]);
 
+  // Background pre-scan menus for the top viewport vendors so they load
+  // instantly when the user clicks a vendor card. Pauses while a vendor is
+  // selected (that view fetches itself).
+  usePrescanMenus(topSpots, { enabled: !selectedSpot, limit: 8, delayMs: 5000 });
+
   const handleSelectSpot = useCallback((spot: FoodSpot) => {
     setSelectedSpot(spot);
     setShowList(false);
