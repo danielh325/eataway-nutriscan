@@ -267,11 +267,18 @@ export default function Admin() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <button onClick={handleBatchFetch} disabled={fetching}
+          <button onClick={() => handleBatchFetch(false)} disabled={fetching}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
             style={{ background: fetching ? "#93c5fd" : "#2563eb" }}>
             <RefreshCw className={`w-4 h-4 ${fetching ? "animate-spin" : ""}`} />
-            {fetching ? "Fetching..." : "Batch Fetch All from Google"}
+            {fetching ? "Fetching..." : "Fetch Missing Photos"}
+          </button>
+          <button onClick={() => handleBatchFetch(true)} disabled={fetching}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: fetching ? "#c4b5fd" : "#7c3aed" }}
+            title="Re-pick the best photo from Google for every vendor (replaces existing photos with smart-scored picks)">
+            <RefreshCw className={`w-4 h-4 ${fetching ? "animate-spin" : ""}`} />
+            🎯 Smart Refresh All
           </button>
           {fetchProgress && <span className="text-sm" style={{ color: "#6b7280" }}>{fetchProgress}</span>}
           {actionError && <span className="text-sm" style={{ color: "#dc2626" }}>{actionError}</span>}
