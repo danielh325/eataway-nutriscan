@@ -35,11 +35,12 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [emptyReason, setEmptyReason] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [isRefining, setIsRefining] = useState(false);
 
-  const isFastQuality = items.length > 0 && items.every((i) => i.source === "auto-fast");
+  const isScraped = items.length > 0 && items.some((i) => i.source === "scraped");
 
   const loadFromDB = useCallback(async (): Promise<MenuItem[]> => {
     const { data } = await supabase
@@ -57,36 +58,34 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return [];
   }, [spotName]);
 
-  // Quality refine in background — silently upgrades fast-cached menu to full quality
-  const refineToQuality = useCallback(async () => {
-    if (isRefining) return;
-    setIsRefining(true);
-    try {
-      await supabase.functions.invoke("discover-vendor-menu", {
-        body: { spotName, address, menuHighlights, forceRefresh: false, quality: "high" },
-      });
-      await loadFromDB(); // reload upgraded data
-    } catch (e) {
-      console.warn("Background refine failed:", e);
-    } finally {
-      setIsRefining(false);
-    }
-  }, [spotName, address, menuHighlights, loadFromDB, isRefining]);
-
-  const discoverMenu = useCallback(async (quality: "fast" | "high" = "fast") => {
+  // Real menu fetch — scrape Grab/Foodpanda. No AI invention.
+  const discoverMenu = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
+    setEmptyReason(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("discover-vendor-menu", {
-        body: { spotName, address, menuHighlights, forceRefresh: quality === "high", quality },
+        body: {
+          spotName,
+          address,
+          menuHighlights,
+          forceRefresh,
+          quality: "high",
+          allowAiFallback: false,
+        },
       });
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
+
       const menuItems = (data?.items || []).map((item: any) => ({
         ...item,
         ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
       }));
       setItems(menuItems);
+      setSourceUrl(data?.sourceUrl || null);
+      if (menuItems.length === 0) {
+        setEmptyReason(data?.reason || "Menu not available on delivery platforms");
+      }
     } catch (e: any) {
       console.error("Menu fetch error:", e);
       setError(e?.message || "Failed to load menu");
@@ -99,21 +98,12 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     setLoading(true);
     loadFromDB().then((found) => {
       if (found.length === 0) {
-        // No cache — fast scan first to show something quickly
-        discoverMenu("fast");
+        discoverMenu(false);
       } else {
         setLoading(false);
       }
     });
   }, [loadFromDB, discoverMenu]);
-
-  // When current data is only fast-quality, kick off a silent quality refine
-  useEffect(() => {
-    if (isFastQuality && !isRefining && !loading) {
-      refineToQuality();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFastQuality, loading]);
 
   const categories = ["All", ...CATEGORY_ORDER.filter((cat) => items.some((i) => i.category === cat))];
   const filtered = activeCategory === "All" ? items : items.filter((i) => i.category === activeCategory);
@@ -128,9 +118,9 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
             <Loader2 className="relative h-8 w-8 animate-spin text-primary" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">Scanning menu…</p>
+            <p className="text-sm font-semibold text-foreground">Fetching real menu…</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              AI is analyzing nutrition for {spotName}
+              Searching Grab & Foodpanda for {spotName}
             </p>
           </div>
         </div>
@@ -142,7 +132,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
     return (
       <div className="rounded-2xl border border-border/40 bg-card p-6 text-center space-y-3">
         <p className="text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="rounded-xl gap-2">
+        <Button variant="outline" size="sm" onClick={() => discoverMenu(true)} className="rounded-xl gap-2">
           <RefreshCw className="h-3.5 w-3.5" /> Try Again
         </Button>
       </div>
@@ -151,10 +141,21 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
 
   if (items.length === 0) {
     return (
-      <div className="rounded-2xl border border-border/40 bg-card p-6 text-center">
-        <p className="text-sm text-muted-foreground">No menu data available yet.</p>
-        <Button variant="outline" size="sm" onClick={() => discoverMenu()} className="mt-3 rounded-xl gap-2">
-          <RefreshCw className="h-3.5 w-3.5" /> Discover Menu
+      <div className="rounded-2xl border border-border/40 bg-card p-6 text-center space-y-3">
+        <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+          <Utensils className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Menu unavailable</p>
+          <p className="text-xs text-muted-foreground">
+            {emptyReason || "We couldn't find a verified menu for this vendor on Grab or Foodpanda."}
+          </p>
+          <p className="text-[11px] text-muted-foreground/80 italic pt-1">
+            We don't show AI-guessed menus — only real items we can verify.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => discoverMenu(true)} className="rounded-xl gap-2">
+          <RefreshCw className="h-3.5 w-3.5" /> Retry scrape
         </Button>
       </div>
     );
