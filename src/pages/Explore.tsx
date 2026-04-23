@@ -88,10 +88,17 @@ const Explore = () => {
     return sorted.slice(0, 5);
   }, [viewportSpots]);
 
-  // Background pre-scan menus for the top viewport vendors so they load
-  // instantly when the user clicks a vendor card. Pauses while a vendor is
-  // selected (that view fetches itself).
-  usePrescanMenus(topSpots, { enabled: !selectedSpot, limit: 8, delayMs: 5000 });
+  // Two-tier background pre-scan:
+  //  - First 3 vendors get a FAST lite-model preview (instant on click)
+  //  - Up to 10 get a full QUALITY scan in the background
+  //  - Periodically a fast-scanned vendor is upgraded to full quality (skipping the one being viewed)
+  usePrescanMenus(topSpots, {
+    enabled: true,
+    fastCount: 3,
+    qualityLimit: 10,
+    qualityDelayMs: 5000,
+    currentlyViewing: selectedSpot?.name ?? null,
+  });
 
   const handleSelectSpot = useCallback((spot: FoodSpot) => {
     setSelectedSpot(spot);
