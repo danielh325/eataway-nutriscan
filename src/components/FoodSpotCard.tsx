@@ -13,7 +13,10 @@ interface FoodSpotCardProps {
 export default function FoodSpotCard({ spot, isFavorite, onToggleFavorite, onSelect }: FoodSpotCardProps) {
   // Free image strategy: prefer DB Places photo, else seed image, else cuisine-matched Unsplash CDN
   const fallback = spot.image || getCuisineImage(spot.categories);
-  const imageUrl = usePlacesPhoto(spot.name, fallback);
+  const imageUrl = usePlacesPhoto(spot.name, fallback, {
+    address: spot.address,
+    categories: spot.categories,
+  });
 
   return (
     <div
