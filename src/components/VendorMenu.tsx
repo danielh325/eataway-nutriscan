@@ -20,6 +20,7 @@ interface MenuItem {
   ingredients: string[] | null;
   is_popular: boolean;
   image_url: string | null;
+  source?: string | null;
 }
 
 interface VendorMenuProps {
@@ -36,28 +37,48 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [isRefining, setIsRefining] = useState(false);
 
-  const loadFromDB = useCallback(async () => {
+  const isFastQuality = items.length > 0 && items.every((i) => i.source === "auto-fast");
+
+  const loadFromDB = useCallback(async (): Promise<MenuItem[]> => {
     const { data } = await supabase
       .from("vendor_menu_items")
       .select("*")
       .eq("spot_name", spotName);
     if (data && data.length > 0) {
-      setItems(data.map((item: any) => ({
+      const mapped = data.map((item: any) => ({
         ...item,
         ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-      })));
-      return true;
+      }));
+      setItems(mapped);
+      return mapped;
     }
-    return false;
+    return [];
   }, [spotName]);
 
-  const discoverMenu = useCallback(async () => {
+  // Quality refine in background — silently upgrades fast-cached menu to full quality
+  const refineToQuality = useCallback(async () => {
+    if (isRefining) return;
+    setIsRefining(true);
+    try {
+      await supabase.functions.invoke("discover-vendor-menu", {
+        body: { spotName, address, menuHighlights, forceRefresh: false, quality: "high" },
+      });
+      await loadFromDB(); // reload upgraded data
+    } catch (e) {
+      console.warn("Background refine failed:", e);
+    } finally {
+      setIsRefining(false);
+    }
+  }, [spotName, address, menuHighlights, loadFromDB, isRefining]);
+
+  const discoverMenu = useCallback(async (quality: "fast" | "high" = "fast") => {
     setLoading(true);
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("discover-vendor-menu", {
-        body: { spotName, address, menuHighlights, forceRefresh: true },
+        body: { spotName, address, menuHighlights, forceRefresh: quality === "high", quality },
       });
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
@@ -77,13 +98,22 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
   useEffect(() => {
     setLoading(true);
     loadFromDB().then((found) => {
-      if (!found) {
-        discoverMenu();
+      if (found.length === 0) {
+        // No cache — fast scan first to show something quickly
+        discoverMenu("fast");
       } else {
         setLoading(false);
       }
     });
   }, [loadFromDB, discoverMenu]);
+
+  // When current data is only fast-quality, kick off a silent quality refine
+  useEffect(() => {
+    if (isFastQuality && !isRefining && !loading) {
+      refineToQuality();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFastQuality, loading]);
 
   const categories = ["All", ...CATEGORY_ORDER.filter((cat) => items.some((i) => i.category === cat))];
   const filtered = activeCategory === "All" ? items : items.filter((i) => i.category === activeCategory);
