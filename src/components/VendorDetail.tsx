@@ -3,6 +3,7 @@ import { ArrowLeft, Heart, Star, MapPin, Clock, Phone, Navigation } from "lucide
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VendorMenu } from "@/components/VendorMenu";
+import { DeliveryOrderButtons } from "@/components/DeliveryOrderButtons";
 
 interface VendorDetailProps {
   spot: FoodSpot;
@@ -90,6 +91,9 @@ export function VendorDetail({
           Get Directions
         </Button>
       </a>
+
+      {/* Delivery order CTAs */}
+      <DeliveryOrderButtons spotName={spot.name} address={spot.address} />
 
       {/* Menu with Nutrition - Uber Eats style */}
       <VendorMenu
