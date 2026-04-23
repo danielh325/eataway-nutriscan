@@ -113,66 +113,102 @@ INSTRUCTIONS:
 
 Use the extract_menu function to return the data.`;
 
-    const geminiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GEMINI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          messages: [{ role: "user", content: prompt }],
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "extract_menu",
-                description: "Extract structured menu items with nutrition data",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    items: {
-                      type: "array",
+    // Try primary model, fall back to alternate model on overload (503/429)
+    const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    const callGemini = async (model: string) => {
+      return await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            tools: [
+              {
+                type: "function",
+                function: {
+                  name: "extract_menu",
+                  description: "Extract structured menu items with nutrition data",
+                  parameters: {
+                    type: "object",
+                    properties: {
                       items: {
-                        type: "object",
-                        properties: {
-                          dish_name: { type: "string" },
-                          description: { type: "string", description: "Short 1-line description" },
-                          price: { type: "string", description: "Price in SGD like '$8.90' or '$12.50'" },
-                          category: { type: "string", enum: ["Main", "Side", "Drink", "Dessert", "Snack", "Bowl", "Wrap", "Salad"] },
-                          calories_kcal: { type: "number" },
-                          protein_g: { type: "number" },
-                          carbs_g: { type: "number" },
-                          fat_g: { type: "number" },
-                          fiber_g: { type: "number" },
-                          confidence: { type: "string", enum: ["high", "medium", "low"] },
-                          ingredients: { type: "array", items: { type: "string" } },
-                          is_popular: { type: "boolean" },
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            dish_name: { type: "string" },
+                            description: { type: "string", description: "Short 1-line description" },
+                            price: { type: "string", description: "Price in SGD like '$8.90' or '$12.50'" },
+                            category: { type: "string", enum: ["Main", "Side", "Drink", "Dessert", "Snack", "Bowl", "Wrap", "Salad"] },
+                            calories_kcal: { type: "number" },
+                            protein_g: { type: "number" },
+                            carbs_g: { type: "number" },
+                            fat_g: { type: "number" },
+                            fiber_g: { type: "number" },
+                            confidence: { type: "string", enum: ["high", "medium", "low"] },
+                            ingredients: { type: "array", items: { type: "string" } },
+                            is_popular: { type: "boolean" },
+                          },
+                          required: ["dish_name", "description", "price", "category", "calories_kcal", "protein_g", "carbs_g", "fat_g", "confidence"],
                         },
-                        required: ["dish_name", "description", "price", "category", "calories_kcal", "protein_g", "carbs_g", "fat_g", "confidence"],
                       },
                     },
+                    required: ["items"],
                   },
-                  required: ["items"],
                 },
               },
-            },
-          ],
-          tool_choice: { type: "function", function: { name: "extract_menu" } },
-        }),
-      }
-    );
+            ],
+            tool_choice: { type: "function", function: { name: "extract_menu" } },
+          }),
+        }
+      );
+    };
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error("Gemini error:", geminiRes.status, errText);
-      return new Response(JSON.stringify({ error: `AI analysis failed (${geminiRes.status})` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let geminiRes: Response | null = null;
+    let lastErrText = "";
+    let lastStatus = 0;
+
+    outer: for (const model of MODELS) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const res = await callGemini(model);
+        if (res.ok) {
+          geminiRes = res;
+          break outer;
+        }
+        lastStatus = res.status;
+        lastErrText = await res.text();
+        console.error(`Gemini error [${model} attempt ${attempt + 1}]:`, res.status, lastErrText);
+        // Only retry/fallback on transient errors
+        if (res.status !== 503 && res.status !== 429 && res.status !== 500) break outer;
+        if (attempt === 0) await sleep(1500); // brief backoff before second attempt
+      }
     }
+
+    if (!geminiRes) {
+      // Return 200 with fallback flag so the frontend doesn't crash
+      const isOverload = lastStatus === 503 || lastStatus === 429;
+      return new Response(
+        JSON.stringify({
+          error: isOverload
+            ? "AI is experiencing high demand. Please try again in a moment."
+            : `AI analysis failed (${lastStatus})`,
+          fallback: true,
+          status: lastStatus,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
 
     const geminiData = await geminiRes.json();
     let menuItems: any[] = [];
