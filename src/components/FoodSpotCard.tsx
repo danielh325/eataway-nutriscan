@@ -21,16 +21,20 @@ export default function FoodSpotCard({ spot, isFavorite, onToggleFavorite, onSel
       onClick={() => onSelect(spot)}
     >
       <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-muted">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={spot.name}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-            loading="lazy"
-          />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">No photo yet</div>
-        )}
+        <img
+          src={imageUrl || fallback}
+          alt={spot.name}
+          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+          onError={(e) => {
+            // If the chosen image fails (DB url broken / Unsplash hiccup), fall back to cuisine image
+            const img = e.currentTarget;
+            const cuisineFallback = getCuisineImage(spot.categories);
+            if (img.src !== cuisineFallback) {
+              img.src = cuisineFallback;
+            }
+          }}
+        />
         {/* Heart overlay */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(spot.id); }}

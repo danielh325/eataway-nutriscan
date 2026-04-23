@@ -29,7 +29,18 @@ export function VendorDetail({
       {/* Hero image */}
       <div className="relative -mx-4 -mt-4 md:-mx-0 md:-mt-0">
         <div className="aspect-[16/9] w-full overflow-hidden rounded-b-2xl md:rounded-2xl bg-muted">
-          <img src={heroImage} alt={spot.name} className="w-full h-full object-cover" />
+          <img
+            src={heroImage}
+            alt={spot.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              const img = e.currentTarget;
+              const cuisineFallback = getCuisineImage(spot.categories);
+              if (img.src !== cuisineFallback) {
+                img.src = cuisineFallback;
+              }
+            }}
+          />
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 rounded-b-2xl md:rounded-2xl" />
 
