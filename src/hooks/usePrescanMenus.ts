@@ -100,22 +100,22 @@ export function usePrescanMenus(
     };
 
     // Defer to idle so we don't compete with map / image loads
+    const w = typeof window !== "undefined" ? window : undefined;
     const idleHandle =
-      typeof window !== "undefined" && "requestIdleCallback" in window
-        ? (window as any).requestIdleCallback(runPrescan, { timeout: 3000 })
-        : window.setTimeout(runPrescan, 2500);
+      w && "requestIdleCallback" in w
+        ? (w as any).requestIdleCallback(runPrescan, { timeout: 3000 })
+        : (w?.setTimeout(runPrescan, 2500) ?? 0);
 
-    // Periodic refresh while user lingers on Explore
-    const intervalId = window.setInterval(runPrescan, refreshIntervalMs);
+    const intervalId = w?.setInterval(runPrescan, refreshIntervalMs) ?? 0;
 
     return () => {
       cancelled = true;
-      if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
-        (window as any).cancelIdleCallback(idleHandle);
-      } else {
-        clearTimeout(idleHandle as number);
+      if (w && "cancelIdleCallback" in w) {
+        (w as any).cancelIdleCallback(idleHandle);
+      } else if (w) {
+        w.clearTimeout(idleHandle as number);
       }
-      clearInterval(intervalId);
+      if (w) w.clearInterval(intervalId);
     };
   }, [spots, enabled, delayMs, limit, refreshIntervalMs]);
 }
