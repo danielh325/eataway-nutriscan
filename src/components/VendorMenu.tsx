@@ -295,6 +295,9 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                         ))}
                       </div>
                     )}
+
+                    {/* Per-dish order links */}
+                    <DishOrderLinks spotName={spotName} dishName={item.dish_name} />
                   </div>
                 )}
               </div>
