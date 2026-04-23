@@ -12,9 +12,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { spotName, address, menuHighlights, forceRefresh, quality } = await req.json();
-    // quality: "fast" (lite model, 8 items, skip Places) | "high" (default, full pipeline)
+    const { spotName, address, menuHighlights, forceRefresh, quality, allowAiFallback } =
+      await req.json();
+    // quality: "fast" | "high"  (controls AI fallback model only)
+    // allowAiFallback: when true, if scraping returns no items, generate AI-estimated menu.
+    //                  Defaults to FALSE — we prefer empty over invented.
     const isFast = quality === "fast";
+    const aiFallback = allowAiFallback === true;
 
     if (!spotName) {
       return new Response(JSON.stringify({ error: "spotName is required" }), {
@@ -28,8 +32,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Check existing cache. In quality mode, only re-scan if existing data is fast-quality
-    // or forceRefresh is true. In fast mode, never overwrite existing data.
+    // 0. Cache short-circuit — prefer scraped > auto > auto-fast.
     if (!forceRefresh) {
       const { data: existing } = await supabase
         .from("vendor_menu_items")
@@ -37,22 +40,91 @@ Deno.serve(async (req) => {
         .eq("spot_name", spotName);
 
       if (existing && existing.length > 0) {
-        // Fast mode: any cache wins
+        const hasScraped = existing.some((r: any) => r.source === "scraped");
+        const hasQuality = existing.some((r: any) => r.source === "auto");
+        if (hasScraped) {
+          return new Response(JSON.stringify({ items: existing, source: "cached-scraped" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (hasQuality && isFast) {
+          return new Response(JSON.stringify({ items: existing, source: "cached" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         if (isFast) {
+          // fast mode is happy with any cache
           return new Response(JSON.stringify({ items: existing, source: "cached" }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        // Quality mode: only return cache if it's already high-quality (source !== "auto-fast")
-        const isFastCache = existing.every((r: any) => r.source === "auto-fast");
-        if (!isFastCache) {
-          return new Response(JSON.stringify({ items: existing, source: "cached" }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-        // Otherwise fall through and refine to high quality
+        // quality mode with only fast cache — fall through to try scraping/AI again
       }
     }
+
+    // 1. Try real scraping first (Firecrawl → Gemini structured extract).
+    try {
+      const scrapeRes = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/scrape-vendor-menu`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ spotName, address, forceRefresh }),
+        },
+      );
+      if (scrapeRes.ok) {
+        const scrapeData = await scrapeRes.json();
+        if (Array.isArray(scrapeData.items) && scrapeData.items.length > 0) {
+          return new Response(
+            JSON.stringify({
+              items: scrapeData.items,
+              source: scrapeData.source || "scraped",
+              method: scrapeData.method,
+              sourceUrl: scrapeData.sourceUrl,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        // Scraper returned no items — only fall through to AI if explicitly allowed
+        if (!aiFallback) {
+          return new Response(
+            JSON.stringify({
+              items: [],
+              source: "none",
+              reason: scrapeData.reason || "Real menu not found on delivery platforms",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      } else if (!aiFallback) {
+        const errText = await scrapeRes.text();
+        console.warn("scrape-vendor-menu non-OK:", scrapeRes.status, errText);
+        return new Response(
+          JSON.stringify({
+            items: [],
+            source: "none",
+            reason: "Menu scraper unavailable. Please try again.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } catch (e) {
+      console.warn("scrape step threw:", e);
+      if (!aiFallback) {
+        return new Response(
+          JSON.stringify({
+            items: [],
+            source: "none",
+            reason: "Menu scraper failed. Please try again.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+    // From here on: aiFallback === true. Original Gemini-generated path runs.
 
     const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
     const PLACES_API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
