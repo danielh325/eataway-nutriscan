@@ -85,7 +85,7 @@ export function VendorDetail({
       </div>
 
       {/* Directions */}
-      <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
+      <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="block mt-5">
         <Button className="w-full rounded-xl gap-2 h-11 text-sm font-semibold" size="lg">
           <Navigation className="h-4 w-4" />
           Get Directions
