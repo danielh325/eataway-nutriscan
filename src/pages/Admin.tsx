@@ -84,13 +84,18 @@ export default function Admin() {
     return () => { document.body.style.overflow = "hidden"; };
   }, [isAdmin, loadPhotos, loadStatuses]);
 
-  const handleBatchFetch = async () => {
+  const handleBatchFetch = async (refresh = false) => {
+    if (refresh && !confirm("Smart-refresh ALL vendor photos? This will re-pick the best photo from Google for every vendor (replaces existing). Takes ~2-3 mins.")) return;
     setFetching(true);
-    setFetchProgress("Starting batch fetch...");
+    setFetchProgress(refresh ? "Smart-refreshing all photos..." : "Fetching missing photos...");
     setActionError("");
     try {
-      const result = await triggerBatchPhotoFetch();
-      setFetchProgress(`Done! ${result.totalFetched} new, ${result.totalCached} cached`);
+      const result = await triggerBatchPhotoFetch(refresh);
+      setFetchProgress(
+        refresh
+          ? `Done! Refreshed ${result.totalFetched} photos (${result.totalFailed} failed)`
+          : `Done! ${result.totalFetched} new, ${result.totalCached} cached`
+      );
       invalidatePlacesPhotoCache();
       await loadPhotos();
     } catch (err: any) {
