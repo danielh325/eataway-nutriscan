@@ -14,6 +14,7 @@ import { foodSpots } from "@/data/foodSpots";
 import { FoodSpot, GoalCategory, Review } from "@/data/types";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePrescanMenus } from "@/hooks/usePrescanMenus";
 import { Search, Navigation, ScanLine } from "lucide-react";
 
 const Explore = () => {
@@ -86,6 +87,11 @@ const Explore = () => {
     const sorted = [...viewportSpots].sort((a, b) => b.rating - a.rating);
     return sorted.slice(0, 5);
   }, [viewportSpots]);
+
+  // Background pre-scan menus for the top viewport vendors so they load
+  // instantly when the user clicks a vendor card. Pauses while a vendor is
+  // selected (that view fetches itself).
+  usePrescanMenus(topSpots, { enabled: !selectedSpot, limit: 8, delayMs: 5000 });
 
   const handleSelectSpot = useCallback((spot: FoodSpot) => {
     setSelectedSpot(spot);

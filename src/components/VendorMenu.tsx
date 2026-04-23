@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Utensils, Flame, RefreshCw, Star, ChevronRight, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DishOrderLinks } from "@/components/DishOrderLinks";
 
 interface MenuItem {
   id: string;
@@ -294,6 +295,9 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                         ))}
                       </div>
                     )}
+
+                    {/* Per-dish order links */}
+                    <DishOrderLinks spotName={spotName} dishName={item.dish_name} />
                   </div>
                 )}
               </div>
