@@ -12,7 +12,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { spotName, address, menuHighlights, forceRefresh } = await req.json();
+    const { spotName, address, menuHighlights, forceRefresh, quality } = await req.json();
+    // quality: "fast" (lite model, 8 items, skip Places) | "high" (default, full pipeline)
+    const isFast = quality === "fast";
 
     if (!spotName) {
       return new Response(JSON.stringify({ error: "spotName is required" }), {
@@ -26,7 +28,8 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Check if we already have menu items for this vendor
+    // Check existing cache. In quality mode, only re-scan if existing data is fast-quality
+    // or forceRefresh is true. In fast mode, never overwrite existing data.
     if (!forceRefresh) {
       const { data: existing } = await supabase
         .from("vendor_menu_items")
@@ -34,9 +37,20 @@ Deno.serve(async (req) => {
         .eq("spot_name", spotName);
 
       if (existing && existing.length > 0) {
-        return new Response(JSON.stringify({ items: existing, source: "cached" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Fast mode: any cache wins
+        if (isFast) {
+          return new Response(JSON.stringify({ items: existing, source: "cached" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        // Quality mode: only return cache if it's already high-quality (source !== "auto-fast")
+        const isFastCache = existing.every((r: any) => r.source === "auto-fast");
+        if (!isFastCache) {
+          return new Response(JSON.stringify({ items: existing, source: "cached" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        // Otherwise fall through and refine to high quality
       }
     }
 
@@ -50,9 +64,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Step 1: Try to find menu info via Google Places
+    // Step 1: Google Places lookup — SKIPPED in fast mode for speed
     let placesMenuText = "";
-    if (PLACES_API_KEY) {
+    if (!isFast && PLACES_API_KEY) {
       try {
         const searchQuery = `${spotName} ${address || "Singapore"} menu`;
         const searchRes = await fetch(
@@ -88,12 +102,23 @@ ${reviewTexts}
       }
     }
 
-    // Step 2: Use Gemini to research and generate full menu with nutrition
+    // Step 2: Gemini menu generation. Fast = 6-8 items, quality = 8-20 items
     const menuHighlightsText = menuHighlights?.length
       ? `Known menu items: ${menuHighlights.join(", ")}`
       : "";
 
-    const prompt = `You are a nutrition analyst for a food delivery app like Grab or Uber Eats.
+    const prompt = isFast
+      ? `Generate a quick preview menu for ${spotName} (${address || "Singapore"}).
+${menuHighlightsText}
+
+INSTRUCTIONS:
+1. Generate 6-8 most likely menu items with rough nutrition estimates
+2. Use standard portion sizes — speed over precision
+3. Mark 2-3 as popular
+4. Confidence should be "low" or "medium" — this is a preview that will be refined later
+
+Use the extract_menu function.`
+      : `You are a nutrition analyst for a food delivery app like Grab or Uber Eats.
 
 Research and generate a COMPLETE menu for this restaurant with accurate nutritional information.
 
