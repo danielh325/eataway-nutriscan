@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { VendorMenu } from "@/components/VendorMenu";
 import { DeliveryOrderButtons } from "@/components/DeliveryOrderButtons";
+import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
+import { getCuisineImage } from "@/lib/cuisineImages";
 
 interface VendorDetailProps {
   spot: FoodSpot;

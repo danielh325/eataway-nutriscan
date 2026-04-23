@@ -1,6 +1,7 @@
 import { FoodSpot } from "@/data/types";
 import { Heart } from "lucide-react";
 import { usePlacesPhoto } from "@/hooks/usePlacesPhoto";
+import { getCuisineImage } from "@/lib/cuisineImages";
 
 interface FoodSpotCardProps {
   spot: FoodSpot;
@@ -10,7 +11,9 @@ interface FoodSpotCardProps {
 }
 
 export default function FoodSpotCard({ spot, isFavorite, onToggleFavorite, onSelect }: FoodSpotCardProps) {
-  const imageUrl = usePlacesPhoto(spot.name, spot.image);
+  // Free image strategy: prefer DB Places photo, else seed image, else cuisine-matched Unsplash CDN
+  const fallback = spot.image || getCuisineImage(spot.categories);
+  const imageUrl = usePlacesPhoto(spot.name, fallback);
 
   return (
     <div
