@@ -33,7 +33,10 @@ function StarRating({ rating, onChange }: { rating: number; onChange?: (r: numbe
 export default function SpotDetail({ spot, isFavorite, onToggleFavorite, onBack, onAddReview }: SpotDetailProps) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
-  const imageUrl = usePlacesPhoto(spot.name, spot.image);
+  const imageUrl = usePlacesPhoto(spot.name, spot.image, {
+    address: spot.address,
+    categories: spot.categories,
+  });
 
   const handleSubmitReview = () => {
     if (!reviewText.trim()) return;

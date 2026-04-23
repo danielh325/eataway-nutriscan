@@ -22,7 +22,10 @@ export function VendorDetail({
 }: VendorDetailProps) {
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
   // Free image fallback chain: DB Places photo → seed image → cuisine-matched Unsplash CDN
-  const heroImage = usePlacesPhoto(spot.name, spot.image || getCuisineImage(spot.categories));
+  const heroImage = usePlacesPhoto(spot.name, spot.image || getCuisineImage(spot.categories), {
+    address: spot.address,
+    categories: spot.categories,
+  });
 
   return (
     <div className="space-y-6 animate-fade-in">
