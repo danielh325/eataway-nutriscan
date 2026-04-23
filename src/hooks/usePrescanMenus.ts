@@ -44,10 +44,7 @@ export function usePrescanMenus(
   const refinedRef = useRef<Set<string>>(new Set());
   const burstRunningRef = useRef(false);
   const viewingRef = useRef<string | null>(currentlyViewing);
-
-  useEffect(() => {
-    viewingRef.current = currentlyViewing;
-  }, [currentlyViewing]);
+  viewingRef.current = currentlyViewing;
 
   useEffect(() => {
     if (!enabled || spots.length === 0) return;
