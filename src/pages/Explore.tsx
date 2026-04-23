@@ -14,6 +14,7 @@ import { foodSpots } from "@/data/foodSpots";
 import { FoodSpot, GoalCategory, Review } from "@/data/types";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePrescanMenus } from "@/hooks/usePrescanMenus";
 import { Search, Navigation, ScanLine } from "lucide-react";
 
 const Explore = () => {
