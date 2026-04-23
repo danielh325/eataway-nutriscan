@@ -21,13 +21,15 @@ export function VendorDetail({
   onBack,
 }: VendorDetailProps) {
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
+  // Free image fallback chain: DB Places photo → seed image → cuisine-matched Unsplash CDN
+  const heroImage = usePlacesPhoto(spot.name, spot.image || getCuisineImage(spot.categories));
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Hero image */}
       <div className="relative -mx-4 -mt-4 md:-mx-0 md:-mt-0">
         <div className="aspect-[16/9] w-full overflow-hidden rounded-b-2xl md:rounded-2xl bg-muted">
-          <img src={spot.image} alt={spot.name} className="w-full h-full object-cover" />
+          <img src={heroImage} alt={spot.name} className="w-full h-full object-cover" />
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 rounded-b-2xl md:rounded-2xl" />
 
