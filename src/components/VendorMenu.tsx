@@ -172,15 +172,23 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
             </div>
             <div>
               <h3 className="font-bold text-foreground text-sm leading-none">NutriScan Menu</h3>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {items.length} items · AI-verified nutrition
+              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
+                {items.length} items ·{" "}
+                {isRefining || isFastQuality ? (
+                  <span className="inline-flex items-center gap-1 text-primary font-medium">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    Refining for accuracy…
+                  </span>
+                ) : (
+                  <span>AI-verified nutrition</span>
+                )}
               </p>
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => discoverMenu()}
+            onClick={() => discoverMenu("high")}
             className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground rounded-lg gap-1 bg-white/40 backdrop-blur"
           >
             <RefreshCw className="h-3 w-3" /> Refresh
