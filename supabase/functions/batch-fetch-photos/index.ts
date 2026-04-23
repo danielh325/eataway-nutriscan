@@ -32,19 +32,92 @@ async function isAuthenticatedAdmin(authHeader: string): Promise<boolean> {
 }
 
 /**
- * Resolve a Google Places Photo API URL to its final CDN URL (no API key).
- * Google redirects to lh3.googleusercontent.com — we store that instead.
+ * Resolve a Google Places Photo API URL to its final CDN URL (no API key exposed).
  */
 async function resolvePhotoUrl(photoRef: string, apiKey: string, maxWidth = 800): Promise<string | null> {
   try {
     const googleUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photoreference=${photoRef}&key=${apiKey}`;
     const res = await fetch(googleUrl, { redirect: "follow" });
     if (res.ok || res.status === 302) {
-      // After following redirects, res.url is the final CDN URL
       return res.url;
     }
     return null;
   } catch {
+    return null;
+  }
+}
+
+type PlacePhoto = {
+  photo_reference: string;
+  width: number;
+  height: number;
+  html_attributions?: string[];
+};
+
+/**
+ * Score a Google Places photo for "best food/storefront shot" likelihood.
+ * Higher score = more likely to be a real food/storefront photo, not a map/menu/streetview.
+ */
+function scorePhoto(photo: PlacePhoto): number {
+  const { width, height, html_attributions = [] } = photo;
+  if (!width || !height) return -100;
+
+  const attrText = html_attributions.join(' ').toLowerCase();
+
+  // Hard reject: streetview / map snapshots
+  if (attrText.includes('street view') || attrText.includes('streetview')) return -100;
+
+  const aspectRatio = width / height;
+  let score = 0;
+
+  // Aspect ratio scoring (food/storefront photos are landscape, ~1.3-1.8)
+  if (aspectRatio >= 1.2 && aspectRatio <= 1.9) {
+    score += 50; // ideal landscape
+  } else if (aspectRatio >= 0.85 && aspectRatio < 1.2) {
+    score += 20; // square-ish (often Instagram-style food shots)
+  } else if (aspectRatio > 1.9 && aspectRatio <= 2.5) {
+    score += 10; // very wide (panoramic exterior - acceptable)
+  } else if (aspectRatio < 0.6) {
+    score -= 60; // tall portrait → usually menu screenshot or vertical map
+  } else if (aspectRatio > 3) {
+    score -= 60; // ultra-wide → usually a map strip
+  }
+
+  // Resolution scoring (higher res = more likely a real photo, not a generated map)
+  const minDim = Math.min(width, height);
+  if (minDim >= 2000) score += 30;
+  else if (minDim >= 1200) score += 20;
+  else if (minDim >= 800) score += 10;
+  else if (minDim < 400) score -= 20;
+
+  // Mega photos boost (DSLR / professional shots)
+  if (width >= 3000 && height >= 2000) score += 15;
+
+  return score;
+}
+
+/**
+ * Fetch full place details (gets up to 10 photos with metadata) and pick the best one.
+ */
+async function fetchBestPhotoForPlace(placeId: string, apiKey: string): Promise<{ photoRef: string; score: number } | null> {
+  try {
+    const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=photos&key=${apiKey}`;
+    const res = await fetch(detailsUrl);
+    const data = await res.json();
+    const photos: PlacePhoto[] = data.result?.photos || [];
+    if (!photos.length) return null;
+
+    // Score each, pick best
+    const scored = photos
+      .map((p) => ({ photo: p, score: scorePhoto(p) }))
+      .filter((s) => s.score > -50) // remove hard-rejects
+      .sort((a, b) => b.score - a.score);
+
+    if (!scored.length) return null;
+    const best = scored[0];
+    return { photoRef: best.photo.photo_reference, score: best.score };
+  } catch (err) {
+    console.error('Place details fetch error:', err);
     return null;
   }
 }
@@ -95,7 +168,7 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
         const types: string[] = candidate.types || [];
 
         if (types.some((t: string) => blockedTypes.includes(t))) continue;
-        if (!candidate.photos?.length) continue;
+        if (!candidate.place_id) continue;
 
         const brandWords = brandName.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2);
         const matchedLower = matchedName.toLowerCase();
@@ -106,13 +179,19 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
 
         if (!hasOverlap) continue;
 
-        const photoRef = candidate.photos[0].photo_reference;
-        console.log(`✅ Matched "${spotInfo.name}" -> "${matchedName}" via "${searchQuery}"`);
-        // Resolve to final CDN URL (no API key exposed)
-        return await resolvePhotoUrl(photoRef, apiKey);
+        // 🎯 Smart photo picking: get all photos, score, pick best
+        const best = await fetchBestPhotoForPlace(candidate.place_id, apiKey);
+        if (!best) {
+          console.log(`⚠️ "${spotInfo.name}" → "${matchedName}" matched but no good photos`);
+          continue;
+        }
+
+        console.log(`✅ "${spotInfo.name}" → "${matchedName}" via "${searchQuery}" (best score: ${best.score})`);
+        return await resolvePhotoUrl(best.photoRef, apiKey);
       }
     }
 
+    // Last-resort: any food place
     const lastResortQuery = `${brandName} Singapore`;
     const lastRes = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(lastResortQuery)}&key=${apiKey}`);
     const lastData = await lastRes.json();
@@ -121,15 +200,17 @@ async function fetchPlacePhoto(spotInfo: { name: string; address?: string; categ
       for (const candidate of lastData.results.slice(0, 5)) {
         const types: string[] = candidate.types || [];
         if (types.some((t: string) => blockedTypes.includes(t))) continue;
-        if (!candidate.photos?.length) continue;
+        if (!candidate.place_id) continue;
         
         const foodTypes = ['restaurant', 'food', 'cafe', 'bakery', 'meal_takeaway', 'meal_delivery', 'bar'];
         const isFoodPlace = types.some((t: string) => foodTypes.includes(t));
-        if (isFoodPlace) {
-          const photoRef = candidate.photos[0].photo_reference;
-          console.log(`✅ Last-resort match "${spotInfo.name}" -> "${candidate.name}" (food type)`);
-          return await resolvePhotoUrl(photoRef, apiKey);
-        }
+        if (!isFoodPlace) continue;
+
+        const best = await fetchBestPhotoForPlace(candidate.place_id, apiKey);
+        if (!best) continue;
+
+        console.log(`✅ Last-resort "${spotInfo.name}" → "${candidate.name}" (score: ${best.score})`);
+        return await resolvePhotoUrl(best.photoRef, apiKey);
       }
     }
 
@@ -148,7 +229,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { spotNames, spotInfos, clearAll } = body;
+    const { spotNames, spotInfos, clearAll, refresh } = body;
 
     // Auth: require JWT + admin role
     const authHeader = req.headers.get('Authorization');
@@ -184,20 +265,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    const allNames = spots.map((s: any) => s.name);
-    const { data: existing } = await supabase
-      .from('place_photos')
-      .select('spot_name, photo_url')
-      .in('spot_name', allNames);
+    // When refresh=true, fetch ALL spots (overwrite existing). Otherwise skip cached ones.
+    let toFetch = spots;
+    let alreadyCachedCount = 0;
+    if (!refresh) {
+      const allNames = spots.map((s: any) => s.name);
+      const { data: existing } = await supabase
+        .from('place_photos')
+        .select('spot_name, photo_url')
+        .in('spot_name', allNames);
 
-    const existingNames = new Set(
-      (existing || [])
-        .filter((row: any) => Boolean(row.photo_url))
-        .map((row: any) => row.spot_name)
-    );
-    const toFetch = spots.filter((s: any) => !existingNames.has(s.name));
+      const existingNames = new Set(
+        (existing || [])
+          .filter((row: any) => Boolean(row.photo_url))
+          .map((row: any) => row.spot_name)
+      );
+      alreadyCachedCount = existingNames.size;
+      toFetch = spots.filter((s: any) => !existingNames.has(s.name));
+    }
 
-    console.log(`Batch fetch: ${toFetch.length} new spots to fetch (${existingNames.size} already cached)`);
+    console.log(`Batch fetch (refresh=${Boolean(refresh)}): ${toFetch.length} to fetch (${alreadyCachedCount} already cached)`);
 
     const results: { name: string; url: string | null }[] = [];
     for (let i = 0; i < toFetch.length; i += 5) {
@@ -216,24 +303,30 @@ Deno.serve(async (req) => {
     }
 
     if (results.length > 0) {
-      const rows = results.map(r => ({
-        spot_name: r.name,
-        photo_url: r.url,
-      }));
+      const rows = results
+        .filter(r => r.url) // only upsert successful fetches (preserve old cache on failure)
+        .map(r => ({
+          spot_name: r.name,
+          photo_url: r.url,
+        }));
 
-      const { error: insertError } = await supabase
-        .from('place_photos')
-        .upsert(rows, { onConflict: 'spot_name' });
+      if (rows.length > 0) {
+        const { error: insertError } = await supabase
+          .from('place_photos')
+          .upsert(rows, { onConflict: 'spot_name' });
 
-      if (insertError) {
-        console.error('Insert error:', insertError);
+        if (insertError) {
+          console.error('Insert error:', insertError);
+        }
       }
     }
 
     return new Response(JSON.stringify({ 
-      fetched: results.length, 
-      alreadyCached: existingNames.size,
-      total: spots.length 
+      fetched: results.filter(r => r.url).length,
+      failed: results.filter(r => !r.url).length,
+      alreadyCached: alreadyCachedCount,
+      total: spots.length,
+      refreshed: Boolean(refresh),
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
