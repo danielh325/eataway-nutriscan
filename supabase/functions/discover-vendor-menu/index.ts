@@ -138,8 +138,10 @@ INSTRUCTIONS:
 
 Use the extract_menu function to return the data.`;
 
-    // Try primary model, fall back to alternate model on overload (503/429)
-    const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+    // Fast mode prefers the lightest model first; quality mode prefers the strongest available
+    const MODELS = isFast
+      ? ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
+      : ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     const callGemini = async (model: string) => {
@@ -259,12 +261,12 @@ Use the extract_menu function to return the data.`;
       });
     }
 
-    // Delete old entries if refreshing
-    if (forceRefresh) {
+    // Delete old entries if refreshing OR if we're upgrading fast → high quality
+    if (forceRefresh || !isFast) {
       await supabase.from("vendor_menu_items").delete().eq("spot_name", spotName);
     }
 
-    // Insert into DB
+    // Insert into DB. Tag fast-mode rows so we know to refine them later.
     const rows = menuItems.map((item: any) => ({
       spot_name: spotName,
       dish_name: item.dish_name,
@@ -276,10 +278,10 @@ Use the extract_menu function to return the data.`;
       carbs_g: Math.round(item.carbs_g || 0),
       fat_g: Math.round(item.fat_g || 0),
       fiber_g: Math.round(item.fiber_g || 0),
-      confidence: item.confidence || "medium",
+      confidence: isFast ? "low" : (item.confidence || "medium"),
       ingredients: item.ingredients || [],
       is_popular: item.is_popular || false,
-      source: "auto",
+      source: isFast ? "auto-fast" : "auto",
     }));
 
     const { data: inserted, error: insertError } = await supabase
