@@ -66,11 +66,13 @@ interface VendorMenuProps {
   spotName: string;
   address?: string;
   menuHighlights?: string[];
+  /** Show per-field confidence chips (name/price/nutrition) and branch badge. Admin-only. */
+  showFieldConfidence?: boolean;
 }
 
 const CATEGORY_ORDER = ["Main", "Bowl", "Salad", "Wrap", "Side", "Snack", "Drink", "Dessert"];
 
-export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProps) {
+export function VendorMenu({ spotName, address, menuHighlights, showFieldConfidence = false }: VendorMenuProps) {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -232,7 +234,7 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                   <>
                     <span>·</span>
                     <span className="text-primary font-medium">From delivery app</span>
-                    {items[0]?.fieldConfidence?.branch === "verified" && (
+                    {showFieldConfidence && items[0]?.fieldConfidence?.branch === "verified" && (
                       <span
                         className="inline-flex items-center gap-0.5 px-1.5 py-0 h-4 rounded border border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 text-[9px] font-semibold"
                         title="Page name and address matched this vendor"
@@ -354,18 +356,22 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                           {item.calories_kcal} kcal
                         </span>
                       </div>
-                      <FieldConfidenceChip
-                        label="name"
-                        status={item.fieldConfidence?.name || "unverified"}
-                      />
-                      <FieldConfidenceChip
-                        label="price"
-                        status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
-                      />
-                      <FieldConfidenceChip
-                        label="nutrition"
-                        status={item.fieldConfidence?.nutrition || "estimated"}
-                      />
+                      {showFieldConfidence && (
+                        <>
+                          <FieldConfidenceChip
+                            label="name"
+                            status={item.fieldConfidence?.name || "unverified"}
+                          />
+                          <FieldConfidenceChip
+                            label="price"
+                            status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
+                          />
+                          <FieldConfidenceChip
+                            label="nutrition"
+                            status={item.fieldConfidence?.nutrition || "estimated"}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                   <ChevronDown
