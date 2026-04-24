@@ -30,6 +30,12 @@ const Index = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Pre-warm the local CLIP model so the first scan doesn't pay the
+  // ~5-10s model-download cost.
+  useEffect(() => {
+    preloadClipModels();
+  }, []);
+
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
     setIsRefining(false);
