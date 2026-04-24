@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MenuUploader } from "@/components/MenuUploader";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { AnalysisSkeleton } from "@/components/LoadingSkeleton";
@@ -7,6 +7,7 @@ import { DishData } from "@/components/DishCard";
 import { Sparkles, Shield, Database, BookOpen } from "lucide-react";
 import { analyzeMenu, refineMenu } from "@/lib/api/menu";
 import { ocrMenuImage } from "@/lib/ocrMenu";
+import { preloadClipModels } from "@/lib/clipVerify";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
