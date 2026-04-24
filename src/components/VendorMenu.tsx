@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Utensils, Flame, RefreshCw, Star, ChevronDown, Loader2, Sparkles, Beef, Wheat, Droplet } from "lucide-react";
+import { Utensils, Flame, RefreshCw, Star, ChevronDown, Loader2, Sparkles, Beef, Wheat, Droplet, Check, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DishOrderLinks } from "@/components/DishOrderLinks";
+
+interface FieldConfidence {
+  name: "verified" | "estimated" | "missing" | "unverified";
+  price: "verified" | "estimated" | "missing" | "unverified";
+  nutrition: "verified" | "estimated" | "missing" | "unverified";
+  branch: "verified" | "estimated" | "missing" | "unverified";
+}
 
 interface MenuItem {
   id: string;
   dish_name: string;
   description: string | null;
+  cleanDescription: string;
+  fieldConfidence: FieldConfidence;
   price: string | null;
   category: string;
   calories_kcal: number;
@@ -21,6 +30,36 @@ interface MenuItem {
   is_popular: boolean;
   image_url: string | null;
   source?: string | null;
+}
+
+// Parse the "<!--FC:name=verified;price=...-->" trailer that the scraper appends.
+const FC_REGEX = /<!--FC:([^>]+)-->/;
+function parseFieldConfidence(description: string | null): {
+  cleanDescription: string;
+  fieldConfidence: FieldConfidence;
+} {
+  const fallback: FieldConfidence = {
+    name: "unverified",
+    price: "unverified",
+    nutrition: "estimated",
+    branch: "unverified",
+  };
+  if (!description) {
+    return { cleanDescription: "", fieldConfidence: fallback };
+  }
+  const m = description.match(FC_REGEX);
+  if (!m) {
+    return { cleanDescription: description.trim(), fieldConfidence: fallback };
+  }
+  const fc = { ...fallback };
+  for (const part of m[1].split(";")) {
+    const [k, v] = part.split("=");
+    if (k && v && k in fc) {
+      (fc as any)[k.trim()] = v.trim();
+    }
+  }
+  const clean = description.replace(FC_REGEX, "").trim();
+  return { cleanDescription: clean, fieldConfidence: fc };
 }
 
 interface VendorMenuProps {
