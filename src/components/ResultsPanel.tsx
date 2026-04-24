@@ -3,8 +3,9 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractMenuImages, verifyDishPhoto, MenuImageBBox } from "@/lib/api/menu";
+import { extractMenuImages, MenuImageBBox } from "@/lib/api/menu";
 import { cropImageRegion } from "@/lib/cropMenuImage";
+import { clipVerifyDishPhoto } from "@/lib/clipVerify";
 import { Button } from "@/components/ui/button";
 
 interface RestaurantContextData {
@@ -49,7 +50,8 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
           const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
           console.log(`Menu extraction returned ${matches.length} candidate photos`);
 
-          // Step 2: For each match, crop client-side and verify with Gemini
+          // Step 2: For each match, crop client-side and verify with local CLIP
+          // (free, runs in browser via @huggingface/transformers — no AI credits).
           for (const m of matches) {
             if (cancelled || abortRef.current) break;
             if (!m.dish_name || !m.bbox) continue;
@@ -58,30 +60,30 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
             if (!crop) continue;
 
             const candidates = dishNames.filter(n => n.toLowerCase() !== m.dish_name.toLowerCase());
-            const verdict = await verifyDishPhoto(crop.base64, "image/jpeg", m.dish_name, candidates);
+            const verdict = await clipVerifyDishPhoto(crop.dataUrl, m.dish_name, candidates);
 
             if (!verdict) {
-              // verification failed — accept tentative match but log
+              // CLIP unavailable — accept tentative match but log
               menuMatches[m.dish_name.toLowerCase()] = { url: crop.dataUrl, bbox: null };
               continue;
             }
 
             if (!verdict.is_food_photo) {
-              console.log(`Rejected non-food crop for "${m.dish_name}"`);
+              console.log(`[CLIP] Rejected non-food crop for "${m.dish_name}" (top=${verdict.bestDish} ${verdict.scores[0]?.score.toFixed(3)})`);
               continue;
             }
 
-            if (verdict.matches && verdict.confidence >= 0.5) {
+            if (verdict.matches && verdict.confidence >= 0.35) {
               menuMatches[m.dish_name.toLowerCase()] = { url: crop.dataUrl, bbox: null };
-              console.log(`✓ Verified "${m.dish_name}" (${verdict.confidence.toFixed(2)})`);
-            } else if (verdict.suggested_dish && verdict.confidence >= 0.6) {
-              const swap = verdict.suggested_dish.toLowerCase();
+              console.log(`[CLIP] ✓ Verified "${m.dish_name}" (conf ${verdict.confidence.toFixed(2)})`);
+            } else if (verdict.bestDish && verdict.bestDish !== m.dish_name && verdict.confidence >= 0.45) {
+              const swap = verdict.bestDish.toLowerCase();
               if (dishNames.some(n => n.toLowerCase() === swap)) {
                 menuMatches[swap] = { url: crop.dataUrl, bbox: null };
-                console.log(`↻ Reassigned crop from "${m.dish_name}" → "${verdict.suggested_dish}"`);
+                console.log(`[CLIP] ↻ Reassigned crop "${m.dish_name}" → "${verdict.bestDish}" (conf ${verdict.confidence.toFixed(2)})`);
               }
             } else {
-              console.log(`✗ Rejected "${m.dish_name}" (${verdict.reasoning})`);
+              console.log(`[CLIP] ✗ Rejected "${m.dish_name}" — top match "${verdict.bestDish}" only ${verdict.confidence.toFixed(2)}`);
             }
           }
           console.log(`Menu extraction confirmed ${Object.keys(menuMatches).length} dish photos`);

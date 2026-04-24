@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MenuUploader } from "@/components/MenuUploader";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { AnalysisSkeleton } from "@/components/LoadingSkeleton";
@@ -6,6 +6,8 @@ import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
 import { Sparkles, Shield, Database, BookOpen } from "lucide-react";
 import { analyzeMenu, refineMenu } from "@/lib/api/menu";
+import { ocrMenuImage } from "@/lib/ocrMenu";
+import { preloadClipModels } from "@/lib/clipVerify";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,13 +30,24 @@ const Index = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  // Pre-warm the local CLIP model so the first scan doesn't pay the
+  // ~5-10s model-download cost.
+  useEffect(() => {
+    preloadClipModels();
+  }, []);
+
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
     setIsRefining(false);
     setShowDailyLog(false);
-    
-    const response = await analyzeMenu(file);
-    
+
+    // Run client-side OCR in parallel with the AI analysis call so the
+    // text is available to enrich the prompt without adding latency.
+    const ocrPromise = ocrMenuImage(file).catch(() => ({ text: "", confidence: 0, durationMs: 0 }));
+    const ocr = await ocrPromise;
+
+    const response = await analyzeMenu(file, ocr.text);
+
     if (response.error) {
       toast({
         title: "Analysis Failed",
