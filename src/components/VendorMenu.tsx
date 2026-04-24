@@ -356,18 +356,22 @@ export function VendorMenu({ spotName, address, menuHighlights, showFieldConfide
                           {item.calories_kcal} kcal
                         </span>
                       </div>
-                      <FieldConfidenceChip
-                        label="name"
-                        status={item.fieldConfidence?.name || "unverified"}
-                      />
-                      <FieldConfidenceChip
-                        label="price"
-                        status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
-                      />
-                      <FieldConfidenceChip
-                        label="nutrition"
-                        status={item.fieldConfidence?.nutrition || "estimated"}
-                      />
+                      {showFieldConfidence && (
+                        <>
+                          <FieldConfidenceChip
+                            label="name"
+                            status={item.fieldConfidence?.name || "unverified"}
+                          />
+                          <FieldConfidenceChip
+                            label="price"
+                            status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
+                          />
+                          <FieldConfidenceChip
+                            label="nutrition"
+                            status={item.fieldConfidence?.nutrition || "estimated"}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
                   <ChevronDown
