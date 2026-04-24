@@ -345,18 +345,18 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                           {item.calories_kcal} kcal
                         </span>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
-                          item.confidence === "high"
-                            ? "border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
-                            : item.confidence === "medium"
-                            ? "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                            : "border-red-500/40 bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
-                        }`}
-                      >
-                        {item.confidence}
-                      </Badge>
+                      <FieldConfidenceChip
+                        label="name"
+                        status={item.fieldConfidence?.name || "unverified"}
+                      />
+                      <FieldConfidenceChip
+                        label="price"
+                        status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
+                      />
+                      <FieldConfidenceChip
+                        label="nutrition"
+                        status={item.fieldConfidence?.nutrition || "estimated"}
+                      />
                     </div>
                   </div>
                   <ChevronDown
