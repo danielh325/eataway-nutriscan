@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Utensils, Flame, RefreshCw, Star, ChevronDown, Loader2, Sparkles, Beef, Wheat, Droplet } from "lucide-react";
+import { Utensils, Flame, RefreshCw, Star, ChevronDown, Loader2, Sparkles, Beef, Wheat, Droplet, Check, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DishOrderLinks } from "@/components/DishOrderLinks";
+
+interface FieldConfidence {
+  name: "verified" | "estimated" | "missing" | "unverified";
+  price: "verified" | "estimated" | "missing" | "unverified";
+  nutrition: "verified" | "estimated" | "missing" | "unverified";
+  branch: "verified" | "estimated" | "missing" | "unverified";
+}
 
 interface MenuItem {
   id: string;
   dish_name: string;
   description: string | null;
+  cleanDescription: string;
+  fieldConfidence: FieldConfidence;
   price: string | null;
   category: string;
   calories_kcal: number;
@@ -21,6 +30,36 @@ interface MenuItem {
   is_popular: boolean;
   image_url: string | null;
   source?: string | null;
+}
+
+// Parse the "<!--FC:name=verified;price=...-->" trailer that the scraper appends.
+const FC_REGEX = /<!--FC:([^>]+)-->/;
+function parseFieldConfidence(description: string | null): {
+  cleanDescription: string;
+  fieldConfidence: FieldConfidence;
+} {
+  const fallback: FieldConfidence = {
+    name: "unverified",
+    price: "unverified",
+    nutrition: "estimated",
+    branch: "unverified",
+  };
+  if (!description) {
+    return { cleanDescription: "", fieldConfidence: fallback };
+  }
+  const m = description.match(FC_REGEX);
+  if (!m) {
+    return { cleanDescription: description.trim(), fieldConfidence: fallback };
+  }
+  const fc = { ...fallback };
+  for (const part of m[1].split(";")) {
+    const [k, v] = part.split("=");
+    if (k && v && k in fc) {
+      (fc as any)[k.trim()] = v.trim();
+    }
+  }
+  const clean = description.replace(FC_REGEX, "").trim();
+  return { cleanDescription: clean, fieldConfidence: fc };
 }
 
 interface VendorMenuProps {
@@ -48,10 +87,16 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
       .select("*")
       .eq("spot_name", spotName);
     if (data && data.length > 0) {
-      const mapped = data.map((item: any) => ({
-        ...item,
-        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-      }));
+      const mapped = data.map((item: any) => {
+        const { cleanDescription, fieldConfidence } = parseFieldConfidence(item.description);
+        return {
+          ...item,
+          description: cleanDescription || null,
+          cleanDescription,
+          fieldConfidence,
+          ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+        };
+      });
       setItems(mapped);
       return mapped;
     }
@@ -77,10 +122,16 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
 
-      const menuItems = (data?.items || []).map((item: any) => ({
-        ...item,
-        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-      }));
+      const menuItems = (data?.items || []).map((item: any) => {
+        const { cleanDescription, fieldConfidence } = parseFieldConfidence(item.description);
+        return {
+          ...item,
+          description: cleanDescription || null,
+          cleanDescription,
+          fieldConfidence,
+          ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+        };
+      });
       setItems(menuItems);
       setSourceUrl(data?.sourceUrl || null);
       if (menuItems.length === 0) {
@@ -175,14 +226,23 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
               <h3 className="font-bold text-foreground text-sm leading-none">
                 {isScraped ? "Verified Menu" : "Menu"}
               </h3>
-              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
-                {items.length} items ·{" "}
-                {isScraped ? (
-                  <span className="text-primary font-medium">Scraped from delivery app</span>
-                ) : (
-                  <span>Cached</span>
+              <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>{items.length} items</span>
+                {isScraped && (
+                  <>
+                    <span>·</span>
+                    <span className="text-primary font-medium">From delivery app</span>
+                    {items[0]?.fieldConfidence?.branch === "verified" && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0 h-4 rounded border border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 text-[9px] font-semibold"
+                        title="Page name and address matched this vendor"
+                      >
+                        <Check className="h-2.5 w-2.5" /> branch
+                      </span>
+                    )}
+                  </>
                 )}
-              </p>
+              </div>
             </div>
           </div>
           <Button
@@ -294,18 +354,18 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
                           {item.calories_kcal} kcal
                         </span>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
-                          item.confidence === "high"
-                            ? "border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
-                            : item.confidence === "medium"
-                            ? "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                            : "border-red-500/40 bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
-                        }`}
-                      >
-                        {item.confidence}
-                      </Badge>
+                      <FieldConfidenceChip
+                        label="name"
+                        status={item.fieldConfidence?.name || "unverified"}
+                      />
+                      <FieldConfidenceChip
+                        label="price"
+                        status={item.fieldConfidence?.price || (item.price ? "verified" : "missing")}
+                      />
+                      <FieldConfidenceChip
+                        label="nutrition"
+                        status={item.fieldConfidence?.nutrition || "estimated"}
+                      />
                     </div>
                   </div>
                   <ChevronDown
@@ -435,5 +495,46 @@ function MacroTile({
       </p>
       <p className="text-[9px] font-medium opacity-75 mt-1 uppercase tracking-wider">{label}</p>
     </div>
+  );
+}
+
+function FieldConfidenceChip({
+  label,
+  status,
+}: {
+  label: string;
+  status: "verified" | "estimated" | "missing" | "unverified";
+}) {
+  const config = {
+    verified: {
+      cls: "border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400",
+      icon: <Check className="h-2.5 w-2.5" />,
+      title: `${label} verified from source`,
+    },
+    estimated: {
+      cls: "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      icon: <span className="text-[8px] font-bold">~</span>,
+      title: `${label} is an estimate`,
+    },
+    missing: {
+      cls: "border-border bg-muted text-muted-foreground",
+      icon: <span className="text-[8px] font-bold">—</span>,
+      title: `${label} not shown on source page`,
+    },
+    unverified: {
+      cls: "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      icon: <Info className="h-2.5 w-2.5" />,
+      title: `${label} not verified`,
+    },
+  }[status];
+
+  return (
+    <span
+      title={config.title}
+      className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0 h-4 rounded border font-semibold ${config.cls}`}
+    >
+      {config.icon}
+      <span className="lowercase">{label}</span>
+    </span>
   );
 }
