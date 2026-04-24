@@ -370,8 +370,14 @@ async function callGemini(
   model: string,
   apiKey: string,
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
+  ocrText?: string
 ): Promise<any> {
+  const ocrBlock =
+    ocrText && ocrText.trim().length > 0
+      ? `\n\nGROUND-TRUTH OCR TEXT (extracted from the menu by Tesseract — use this as authoritative for spelling and dish presence):\n"""\n${ocrText.slice(0, 6000)}\n"""\n\nIMPORTANT: Every dish name in your output MUST come from or closely match the OCR text above. Do not invent dishes. If the OCR is messy, prefer the visible image.`
+      : "";
+
   const resp = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     {
@@ -397,7 +403,7 @@ For each dish, include a "search_term" field — the best English query to find 
 
 After your first pass, do a SECOND pass to verify completeness. Missing even one dish is a critical failure.
 
-Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.`,
+Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE results.${ocrBlock}`,
               },
               {
                 type: "image_url",
@@ -426,11 +432,12 @@ Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE res
 async function runEnsemble(
   apiKey: string,
   imageBase64: string,
-  mimeType: string
+  mimeType: string,
+  ocrText?: string
 ): Promise<{ dishes: any[]; restaurant_context: any; model_agreement: number }> {
   const [proResult, flashResult] = await Promise.allSettled([
-    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType),
-    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType),
+    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType, ocrText),
+    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType, ocrText),
   ]);
 
   const proData = proResult.status === "fulfilled" && !proResult.value?.error ? proResult.value : null;
@@ -523,7 +530,7 @@ serve(async (req) => {
       );
     }
 
-    const { imageBase64, mimeType } = body;
+    const { imageBase64, mimeType, ocrText } = body;
     if (!imageBase64) {
       return new Response(
         JSON.stringify({ error: "No image provided" }),
@@ -540,8 +547,10 @@ serve(async (req) => {
     }
 
     // ─── STAGE 1: Multi-model ensemble ────────────────────────────────
-    console.log("Stage 1: Running dual-model ensemble (Pro + Flash)...");
-    const ensemble = await runEnsemble(GEMINI_API_KEY, imageBase64, mimeType);
+    console.log(
+      `Stage 1: Running dual-model ensemble (Pro + Flash)${ocrText ? ` with OCR pre-pass (${ocrText.length} chars)` : ""}...`
+    );
+    const ensemble = await runEnsemble(GEMINI_API_KEY, imageBase64, mimeType, ocrText);
     console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes, agreement: ${(ensemble.model_agreement * 100).toFixed(0)}%`);
 
     // ─── STAGE 2: Cross-reference with external databases ─────────────
