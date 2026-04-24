@@ -87,10 +87,16 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
       .select("*")
       .eq("spot_name", spotName);
     if (data && data.length > 0) {
-      const mapped = data.map((item: any) => ({
-        ...item,
-        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-      }));
+      const mapped = data.map((item: any) => {
+        const { cleanDescription, fieldConfidence } = parseFieldConfidence(item.description);
+        return {
+          ...item,
+          description: cleanDescription || null,
+          cleanDescription,
+          fieldConfidence,
+          ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+        };
+      });
       setItems(mapped);
       return mapped;
     }
