@@ -488,3 +488,44 @@ function MacroTile({
     </div>
   );
 }
+
+function FieldConfidenceChip({
+  label,
+  status,
+}: {
+  label: string;
+  status: "verified" | "estimated" | "missing" | "unverified";
+}) {
+  const config = {
+    verified: {
+      cls: "border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400",
+      icon: <Check className="h-2.5 w-2.5" />,
+      title: `${label} verified from source`,
+    },
+    estimated: {
+      cls: "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      icon: <span className="text-[8px] font-bold">~</span>,
+      title: `${label} is an estimate`,
+    },
+    missing: {
+      cls: "border-border bg-muted text-muted-foreground",
+      icon: <span className="text-[8px] font-bold">—</span>,
+      title: `${label} not shown on source page`,
+    },
+    unverified: {
+      cls: "border-amber-500/40 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
+      icon: <Info className="h-2.5 w-2.5" />,
+      title: `${label} not verified`,
+    },
+  }[status];
+
+  return (
+    <span
+      title={config.title}
+      className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0 h-4 rounded border font-semibold ${config.cls}`}
+    >
+      {config.icon}
+      <span className="lowercase">{label}</span>
+    </span>
+  );
+}
