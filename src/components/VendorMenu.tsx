@@ -122,10 +122,16 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
 
-      const menuItems = (data?.items || []).map((item: any) => ({
-        ...item,
-        ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-      }));
+      const menuItems = (data?.items || []).map((item: any) => {
+        const { cleanDescription, fieldConfidence } = parseFieldConfidence(item.description);
+        return {
+          ...item,
+          description: cleanDescription || null,
+          cleanDescription,
+          fieldConfidence,
+          ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+        };
+      });
       setItems(menuItems);
       setSourceUrl(data?.sourceUrl || null);
       if (menuItems.length === 0) {
