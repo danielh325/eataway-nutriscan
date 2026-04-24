@@ -6,6 +6,7 @@ import { DailyLog } from "@/components/DailyLog";
 import { DishData } from "@/components/DishCard";
 import { Sparkles, Shield, Database, BookOpen } from "lucide-react";
 import { analyzeMenu, refineMenu } from "@/lib/api/menu";
+import { ocrMenuImage } from "@/lib/ocrMenu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,9 +33,14 @@ const Index = () => {
     setIsProcessing(true);
     setIsRefining(false);
     setShowDailyLog(false);
-    
-    const response = await analyzeMenu(file);
-    
+
+    // Run client-side OCR in parallel with the AI analysis call so the
+    // text is available to enrich the prompt without adding latency.
+    const ocrPromise = ocrMenuImage(file).catch(() => ({ text: "", confidence: 0, durationMs: 0 }));
+    const ocr = await ocrPromise;
+
+    const response = await analyzeMenu(file, ocr.text);
+
     if (response.error) {
       toast({
         title: "Analysis Failed",
