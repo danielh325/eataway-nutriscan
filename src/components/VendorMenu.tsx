@@ -66,11 +66,13 @@ interface VendorMenuProps {
   spotName: string;
   address?: string;
   menuHighlights?: string[];
+  /** Show per-field confidence chips (name/price/nutrition) and branch badge. Admin-only. */
+  showFieldConfidence?: boolean;
 }
 
 const CATEGORY_ORDER = ["Main", "Bowl", "Salad", "Wrap", "Side", "Snack", "Drink", "Dessert"];
 
-export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProps) {
+export function VendorMenu({ spotName, address, menuHighlights, showFieldConfidence = false }: VendorMenuProps) {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
