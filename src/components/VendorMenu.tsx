@@ -226,14 +226,23 @@ export function VendorMenu({ spotName, address, menuHighlights }: VendorMenuProp
               <h3 className="font-bold text-foreground text-sm leading-none">
                 {isScraped ? "Verified Menu" : "Menu"}
               </h3>
-              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5">
-                {items.length} items ·{" "}
-                {isScraped ? (
-                  <span className="text-primary font-medium">Scraped from delivery app</span>
-                ) : (
-                  <span>Cached</span>
+              <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>{items.length} items</span>
+                {isScraped && (
+                  <>
+                    <span>·</span>
+                    <span className="text-primary font-medium">From delivery app</span>
+                    {items[0]?.fieldConfidence?.branch === "verified" && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0 h-4 rounded border border-green-500/40 bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 text-[9px] font-semibold"
+                        title="Page name and address matched this vendor"
+                      >
+                        <Check className="h-2.5 w-2.5" /> branch
+                      </span>
+                    )}
+                  </>
                 )}
-              </p>
+              </div>
             </div>
           </div>
           <Button
