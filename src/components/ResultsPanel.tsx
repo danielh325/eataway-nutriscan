@@ -3,7 +3,8 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractMenuImages, MenuImageBBox } from "@/lib/api/menu";
+import { extractMenuImages, verifyDishPhoto, MenuImageBBox } from "@/lib/api/menu";
+import { cropImageRegion } from "@/lib/cropMenuImage";
 import { Button } from "@/components/ui/button";
 
 interface RestaurantContextData {
@@ -40,18 +41,50 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
     let cancelled = false;
 
     const run = async () => {
-      // Step 1: Try to extract real photos from the menu image
+      // Step 1: Find food photos in the menu (returns bboxes + tentative dish assignments)
       const menuMatches: Record<string, { url: string; bbox?: MenuImageBBox | null }> = {};
       if (menuImageBase64 && menuMimeType) {
         try {
           const dishNames = dishes.map(d => d.dish);
           const matches = await extractMenuImages(menuImageBase64, menuMimeType, dishNames);
+          console.log(`Menu extraction returned ${matches.length} candidate photos`);
+
+          // Step 2: For each match, crop client-side and verify with Gemini
           for (const m of matches) {
-            if (m.image_url && m.dish_name) {
-              menuMatches[m.dish_name.toLowerCase()] = { url: m.image_url, bbox: m.bbox };
+            if (cancelled || abortRef.current) break;
+            if (!m.dish_name || !m.bbox) continue;
+
+            const crop = await cropImageRegion(menuImageBase64, menuMimeType, m.bbox);
+            if (!crop) continue;
+
+            const candidates = dishNames.filter(n => n.toLowerCase() !== m.dish_name.toLowerCase());
+            const verdict = await verifyDishPhoto(crop.base64, "image/jpeg", m.dish_name, candidates);
+
+            if (!verdict) {
+              // verification failed — accept tentative match but log
+              menuMatches[m.dish_name.toLowerCase()] = { url: crop.dataUrl, bbox: null };
+              continue;
+            }
+
+            if (!verdict.is_food_photo) {
+              console.log(`Rejected non-food crop for "${m.dish_name}"`);
+              continue;
+            }
+
+            if (verdict.matches && verdict.confidence >= 0.5) {
+              menuMatches[m.dish_name.toLowerCase()] = { url: crop.dataUrl, bbox: null };
+              console.log(`✓ Verified "${m.dish_name}" (${verdict.confidence.toFixed(2)})`);
+            } else if (verdict.suggested_dish && verdict.confidence >= 0.6) {
+              const swap = verdict.suggested_dish.toLowerCase();
+              if (dishNames.some(n => n.toLowerCase() === swap)) {
+                menuMatches[swap] = { url: crop.dataUrl, bbox: null };
+                console.log(`↻ Reassigned crop from "${m.dish_name}" → "${verdict.suggested_dish}"`);
+              }
+            } else {
+              console.log(`✗ Rejected "${m.dish_name}" (${verdict.reasoning})`);
             }
           }
-          console.log(`Menu extraction found ${Object.keys(menuMatches).length} dish photos`);
+          console.log(`Menu extraction confirmed ${Object.keys(menuMatches).length} dish photos`);
         } catch (err) {
           console.warn("Menu image extraction failed, will generate all:", err);
         }

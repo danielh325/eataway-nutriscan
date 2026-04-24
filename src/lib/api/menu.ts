@@ -132,6 +132,37 @@ export async function extractMenuImages(
   }
 }
 
+export interface VerifyDishPhotoResult {
+  matches: boolean;
+  confidence: number;
+  reasoning: string;
+  suggested_dish: string | null;
+  is_food_photo: boolean;
+}
+
+export async function verifyDishPhoto(
+  imageBase64: string,
+  mimeType: string,
+  dishName: string,
+  candidateDishes: string[]
+): Promise<VerifyDishPhotoResult | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("verify-dish-photo", {
+      body: { imageBase64, mimeType, dish_name: dishName, candidate_dishes: candidateDishes },
+    });
+    if (error) {
+      const message = await getInvokeErrorMessage(error, "Verification failed");
+      console.warn("verifyDishPhoto error:", message);
+      return null;
+    }
+    if (!data || data.error) return null;
+    return data as VerifyDishPhotoResult;
+  } catch (err) {
+    console.warn("verifyDishPhoto failed:", err);
+    return null;
+  }
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
