@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.analyze-menu-v2]
 verify_jwt = false
+
+[functions.verify-dish-photo]
+verify_jwt = false
