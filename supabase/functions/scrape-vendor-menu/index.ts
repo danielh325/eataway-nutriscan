@@ -1,17 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * Real menu scraper.
+ * Real menu scraper — accuracy-focused.
  *
- * Strategy (in order, stop on first success):
- *  1. Firecrawl SEARCH: "<vendor> <area> menu site:foodpanda.sg" + same for grab.com
- *     → take top result URL → scrape it (markdown).
- *  2. If still nothing, Firecrawl SEARCH without site filter, restricted to known
- *     SG delivery domains (foodpanda.sg, food.grab.com, deliveroo.com.sg as legacy).
- *  3. Pass scraped markdown to Gemini with a strict tool-call schema. The model is
- *     told to ONLY include items it can literally see in the text — no invention.
- *  4. If 0 items extracted, we return empty + a `reason`. We DO NOT fall back to
- *     AI generation — caller decides what to show.
+ *  1. Firecrawl SEARCH on foodpanda.sg / food.grab.com → candidate URLs.
+ *  2. Firecrawl SCRAPE with HTML format + waitFor + scroll action so JS-rendered
+ *     prices/items are present (markdown converters often strip price spans).
+ *  3. BRANCH-MATCH VERIFICATION: ask Gemini whether the scraped page's title +
+ *     header text actually correspond to the requested vendor at the requested
+ *     address. If "no" → reject this candidate, try the next one.
+ *  4. Extract structured menu from the HTML with Gemini (strict, no invention).
+ *  5. Persist with per-field confidence flags so the UI can be honest about
+ *     what is verified vs estimated.
  */
 
 const corsHeaders = {
@@ -35,7 +35,6 @@ interface ScrapedMenuItem {
   fiber_g?: number;
   ingredients?: string[];
   is_popular?: boolean;
-  source_url?: string;
 }
 
 Deno.serve(async (req) => {
@@ -59,7 +58,7 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Cache short-circuit: if we have scraped data, return it
+    // Cache short-circuit
     if (!forceRefresh) {
       const { data: existing } = await supabase
         .from("vendor_menu_items")
@@ -71,7 +70,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Step 1: Find a real delivery-app URL for this vendor ─────────────────
+    // ── Step 1: Find candidate delivery-app URLs ─────────────────────────────
     const area = extractArea(address);
     const cleanedName = cleanVendorName(spotName);
     const searchQueries = [
@@ -80,72 +79,143 @@ Deno.serve(async (req) => {
       `${cleanedName} singapore menu`,
     ];
 
-    let scrapedMarkdown = "";
-    let sourceUrl = "";
-    let sourcePlatform = "";
-
+    const candidates: string[] = [];
     for (const query of searchQueries) {
       console.log(`[scrape] searching: ${query}`);
       const results = await firecrawlSearch(query.trim(), FIRECRAWL_API_KEY);
-      const candidate = pickBestDeliveryUrl(results);
-      if (!candidate) continue;
-
-      console.log(`[scrape] scraping: ${candidate}`);
-      const md = await firecrawlScrape(candidate, FIRECRAWL_API_KEY);
-      if (md && md.length > 300) {
-        scrapedMarkdown = md;
-        sourceUrl = candidate;
-        sourcePlatform = candidate.includes("grab.com")
-          ? "grab"
-          : candidate.includes("foodpanda")
-          ? "foodpanda"
-          : "web";
-        break;
+      for (const r of results) {
+        const url = r.url || "";
+        if (!url) continue;
+        if (DELIVERY_DOMAINS.some((d) => url.includes(d)) && !candidates.includes(url)) {
+          candidates.push(url);
+        }
       }
+      if (candidates.length >= 3) break;
     }
 
-    if (!scrapedMarkdown) {
+    if (candidates.length === 0) {
       return jsonResponse({
         items: [],
         source: "none",
-        reason: "No menu found on delivery platforms",
+        reason: "No delivery-app listing found for this vendor",
       });
     }
 
-    // Trim huge pages — keep first ~16k chars (most menu lists fit)
-    const trimmedMd = scrapedMarkdown.slice(0, 16000);
+    // ── Step 2: Scrape + branch-verify each candidate until one matches ──────
+    let scrapedHtml = "";
+    let scrapedMarkdown = "";
+    let sourceUrl = "";
+    let sourcePlatform = "";
+    let branchVerified = false;
+    const verificationNotes: string[] = [];
 
-    // ── Step 2: Extract structured menu with Gemini (strict, no invention) ──
-    const items = await extractMenuFromMarkdown(trimmedMd, spotName, GEMINI_API_KEY);
+    for (const url of candidates.slice(0, 3)) {
+      console.log(`[scrape] scraping: ${url}`);
+      const scraped = await firecrawlScrape(url, FIRECRAWL_API_KEY);
+      if (!scraped.markdown && !scraped.html) continue;
+
+      // Branch verification — does this page's identity match our vendor?
+      const verdict = await verifyBranchMatch(
+        spotName,
+        address || "",
+        scraped.markdown.slice(0, 4000),
+        GEMINI_API_KEY,
+      );
+      console.log(`[scrape] branch verdict for ${url}:`, verdict);
+      verificationNotes.push(`${url}: ${verdict.match} (${verdict.reason})`);
+
+      if (verdict.match === "yes") {
+        scrapedHtml = scraped.html;
+        scrapedMarkdown = scraped.markdown;
+        sourceUrl = url;
+        sourcePlatform = url.includes("grab.com") ? "grab" : "foodpanda";
+        branchVerified = true;
+        break;
+      }
+      // "maybe" → accept only if no other candidate verifies
+      if (verdict.match === "maybe" && !sourceUrl) {
+        scrapedHtml = scraped.html;
+        scrapedMarkdown = scraped.markdown;
+        sourceUrl = url;
+        sourcePlatform = url.includes("grab.com") ? "grab" : "foodpanda";
+        branchVerified = false; // keep looking; only use as fallback
+      }
+    }
+
+    if (!sourceUrl) {
+      return jsonResponse({
+        items: [],
+        source: "none",
+        reason: "Found delivery pages but none matched this vendor's name + address",
+        debug: verificationNotes,
+      });
+    }
+
+    // Prefer HTML (preserves price spans) but fall back to markdown
+    const extractionInput = (scrapedHtml || scrapedMarkdown).slice(0, 24000);
+
+    // ── Step 3: Extract structured menu (strict, no invention) ──────────────
+    const items = await extractMenuFromContent(extractionInput, spotName, GEMINI_API_KEY);
 
     if (!items || items.length === 0) {
       return jsonResponse({
         items: [],
         source: "none",
-        reason: "Page found but no recognisable menu items extracted",
+        reason: "Page matched but no recognisable menu items extracted",
         sourceUrl,
+        branchVerified,
       });
     }
 
-    // ── Step 3: Persist (replace any existing rows for this vendor) ─────────
+    // ── Step 4: Persist with per-field confidence ────────────────────────────
     await supabase.from("vendor_menu_items").delete().eq("spot_name", spotName);
 
-    const rows = items.map((item) => ({
-      spot_name: spotName,
-      dish_name: item.dish_name,
-      description: item.description ?? null,
-      price: item.price ?? null,
-      category: item.category || "Main",
-      calories_kcal: Math.round(item.calories_kcal || 0),
-      protein_g: Math.round(item.protein_g || 0),
-      carbs_g: Math.round(item.carbs_g || 0),
-      fat_g: Math.round(item.fat_g || 0),
-      fiber_g: Math.round(item.fiber_g || 0),
-      confidence: "high", // names + prices are scraped, nutrition still estimated
-      ingredients: item.ingredients || [],
-      is_popular: item.is_popular || false,
-      source: "scraped",
-    }));
+    const rows = items.map((item) => {
+      // Per-field confidence bundled into a single string the UI can parse.
+      // Format: "name:verified|price:verified|nutrition:estimated|branch:verified"
+      const priceStatus = item.price ? "verified" : "missing";
+      const branchStatus = branchVerified ? "verified" : "unverified";
+      const fieldConfidence = [
+        "name:verified",
+        `price:${priceStatus}`,
+        "nutrition:estimated",
+        `branch:${branchStatus}`,
+      ].join("|");
+
+      return {
+        spot_name: spotName,
+        dish_name: item.dish_name,
+        description: item.description ?? null,
+        price: item.price ?? null,
+        category: item.category || "Main",
+        calories_kcal: Math.round(item.calories_kcal || 0),
+        protein_g: Math.round(item.protein_g || 0),
+        carbs_g: Math.round(item.carbs_g || 0),
+        fat_g: Math.round(item.fat_g || 0),
+        fiber_g: Math.round(item.fiber_g || 0),
+        // overall confidence reflects branch+name+price verification status
+        confidence: branchVerified ? "high" : "medium",
+        ingredients: item.ingredients || [],
+        is_popular: item.is_popular || false,
+        source: "scraped",
+        // Stash structured per-field confidence in description if no dedicated column.
+        // We re-use a separator the UI can split on.
+        description_meta: undefined,
+        // We'll store per-field confidence in `description` suffix when no dedicated column.
+        // Actually: keep description clean; embed in a parseable suffix on `category`? No.
+        // Simplest: prefix description with marker, parsed on client.
+      } as any;
+    });
+
+    // Inject per-field confidence into a recognisable trailer on description
+    // so the existing schema doesn't need a migration.
+    rows.forEach((row, i) => {
+      const item = items[i];
+      const priceStatus = item.price ? "verified" : "missing";
+      const branchStatus = branchVerified ? "verified" : "unverified";
+      const meta = `\n\n<!--FC:name=verified;price=${priceStatus};nutrition=estimated;branch=${branchStatus}-->`;
+      row.description = (row.description || "") + meta;
+    });
 
     const { data: inserted, error: insertError } = await supabase
       .from("vendor_menu_items")
@@ -162,6 +232,7 @@ Deno.serve(async (req) => {
       source: "scraped",
       method: sourcePlatform,
       sourceUrl,
+      branchVerified,
     });
   } catch (error: any) {
     console.error("scrape-vendor-menu error:", error);
@@ -210,18 +281,13 @@ async function firecrawlSearch(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        query,
-        limit: 5,
-        country: "sg",
-      }),
+      body: JSON.stringify({ query, limit: 5, country: "sg" }),
     });
     if (!res.ok) {
       console.warn("Firecrawl search failed:", res.status, await res.text());
       return [];
     }
     const data = await res.json();
-    // v2 returns { success, data: { web: [...] } } typically
     const web = data?.data?.web || data?.web || data?.data || [];
     return Array.isArray(web) ? web : [];
   } catch (e) {
@@ -230,20 +296,10 @@ async function firecrawlSearch(
   }
 }
 
-function pickBestDeliveryUrl(results: FirecrawlSearchResult[]): string | null {
-  for (const r of results) {
-    const url = r.url || "";
-    if (DELIVERY_DOMAINS.some((d) => url.includes(d))) return url;
-  }
-  // Fallback: first non-empty url that isn't an aggregator/blog
-  for (const r of results) {
-    const url = r.url || "";
-    if (url && !/wikipedia|tripadvisor|reddit|youtube|facebook/i.test(url)) return url;
-  }
-  return null;
-}
-
-async function firecrawlScrape(url: string, apiKey: string): Promise<string> {
+async function firecrawlScrape(
+  url: string,
+  apiKey: string,
+): Promise<{ markdown: string; html: string }> {
   try {
     const res = await fetch(`${FIRECRAWL_V2}/scrape`, {
       method: "POST",
@@ -253,45 +309,135 @@ async function firecrawlScrape(url: string, apiKey: string): Promise<string> {
       },
       body: JSON.stringify({
         url,
-        formats: ["markdown"],
+        formats: ["markdown", "html"],
         onlyMainContent: true,
-        waitFor: 1500,
+        waitFor: 3500,
+        // Scroll to force lazy-loaded menu sections to render
+        actions: [
+          { type: "wait", milliseconds: 1500 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 800 },
+          { type: "scroll", direction: "down" },
+          { type: "wait", milliseconds: 800 },
+        ],
       }),
     });
     if (!res.ok) {
       console.warn("Firecrawl scrape failed:", res.status, await res.text());
-      return "";
+      return { markdown: "", html: "" };
     }
     const data = await res.json();
-    return data?.data?.markdown || data?.markdown || "";
+    return {
+      markdown: data?.data?.markdown || data?.markdown || "",
+      html: data?.data?.html || data?.html || "",
+    };
   } catch (e) {
     console.warn("Firecrawl scrape error:", e);
-    return "";
+    return { markdown: "", html: "" };
   }
 }
 
-async function extractMenuFromMarkdown(
-  markdown: string,
+interface BranchVerdict {
+  match: "yes" | "no" | "maybe";
+  reason: string;
+}
+
+async function verifyBranchMatch(
+  vendorName: string,
+  vendorAddress: string,
+  pageText: string,
+  geminiApiKey: string,
+): Promise<BranchVerdict> {
+  if (!pageText.trim()) return { match: "no", reason: "empty page" };
+
+  const prompt = `You are verifying whether a scraped delivery-app page actually corresponds to a specific restaurant branch.
+
+REQUESTED VENDOR:
+  Name: ${vendorName}
+  Address: ${vendorAddress || "(unknown)"}
+
+SCRAPED PAGE (first part):
+---
+${pageText}
+---
+
+Decide:
+- "yes" — the page's restaurant name clearly matches the requested vendor AND (if address is known) the branch/area in the page is consistent with the requested address. Tiny variations in capitalisation/punctuation are fine.
+- "no" — the page is for a different restaurant entirely, or for a clearly different branch in another part of Singapore.
+- "maybe" — same restaurant chain but you can't confirm the branch matches.
+
+Return via the verify_match function.`;
+
+  try {
+    const res = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${geminiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash-lite",
+          messages: [{ role: "user", content: prompt }],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "verify_match",
+                description: "Decide if the scraped page matches the requested vendor branch",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    match: { type: "string", enum: ["yes", "no", "maybe"] },
+                    reason: { type: "string" },
+                  },
+                  required: ["match", "reason"],
+                },
+              },
+            },
+          ],
+          tool_choice: { type: "function", function: { name: "verify_match" } },
+        }),
+      },
+    );
+    if (!res.ok) {
+      console.warn("verify_match failed:", res.status);
+      return { match: "maybe", reason: "verifier error" };
+    }
+    const data = await res.json();
+    const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!args) return { match: "maybe", reason: "no verdict" };
+    const parsed = JSON.parse(args);
+    return { match: parsed.match || "maybe", reason: parsed.reason || "" };
+  } catch (e) {
+    console.warn("verify_match error:", e);
+    return { match: "maybe", reason: "exception" };
+  }
+}
+
+async function extractMenuFromContent(
+  content: string,
   vendorName: string,
   geminiApiKey: string,
 ): Promise<ScrapedMenuItem[]> {
-  const prompt = `You are extracting a menu from a real restaurant page that was just scraped from a food delivery website.
+  const prompt = `You are extracting a menu from a real restaurant page that was just scraped from a food delivery website. The content may be HTML or markdown — read both.
 
 Restaurant: ${vendorName}
 
-SCRAPED PAGE CONTENT (markdown):
+SCRAPED PAGE CONTENT:
 ---
-${markdown}
+${content}
 ---
 
 STRICT RULES:
-1. ONLY include menu items that literally appear in the scraped content above. DO NOT invent items.
-2. If a price appears next to the dish name, capture it exactly (e.g. "$8.90", "S$12.50").
-3. If no price is visible for an item, leave the price field empty/null — do NOT guess.
+1. ONLY include menu items that literally appear in the content above. DO NOT invent items.
+2. If a price appears next to the dish name (e.g. in HTML look for spans/divs with $ or S$ near the name), capture it exactly. Strip currency padding to the form "$8.90" or "S$12.50".
+3. If no price is visible for an item, leave price empty/null — do NOT guess.
 4. Estimate nutrition (calories/protein/carbs/fat) using realistic Singapore portion sizes for that dish type. Nutrition is the only field you may estimate.
-5. Mark an item as is_popular: true ONLY if the page explicitly tags it (e.g. "Popular", "Best seller", "Chef's pick"). Otherwise false.
-6. Pick a reasonable category from: Main, Side, Drink, Dessert, Snack, Bowl, Wrap, Salad.
-7. If the scraped page clearly has no menu items (e.g. it's a search results page or a 404), return an empty list.
+5. Mark is_popular: true ONLY if the page literally tags it ("Popular", "Best seller", "Chef's pick", "Recommended"). Otherwise false.
+6. Pick a category from: Main, Side, Drink, Dessert, Snack, Bowl, Wrap, Salad.
+7. If no menu items are present, return an empty list.
 
 Use the extract_scraped_menu function.`;
 
@@ -311,8 +457,7 @@ Use the extract_scraped_menu function.`;
             type: "function",
             function: {
               name: "extract_scraped_menu",
-              description:
-                "Extract menu items literally present in the scraped page content. Do not invent.",
+              description: "Extract menu items literally present in the scraped page content. Do not invent.",
               parameters: {
                 type: "object",
                 properties: {
@@ -326,16 +471,7 @@ Use the extract_scraped_menu function.`;
                         price: { type: "string" },
                         category: {
                           type: "string",
-                          enum: [
-                            "Main",
-                            "Side",
-                            "Drink",
-                            "Dessert",
-                            "Snack",
-                            "Bowl",
-                            "Wrap",
-                            "Salad",
-                          ],
+                          enum: ["Main", "Side", "Drink", "Dessert", "Snack", "Bowl", "Wrap", "Salad"],
                         },
                         calories_kcal: { type: "number" },
                         protein_g: { type: "number" },
