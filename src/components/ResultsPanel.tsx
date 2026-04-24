@@ -3,7 +3,8 @@ import { DishCard, DishData } from "./DishCard";
 import { RestaurantContext } from "./RestaurantContext";
 import { Utensils, BarChart3, ShieldCheck, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { extractMenuImages, MenuImageBBox } from "@/lib/api/menu";
+import { extractMenuImages, verifyDishPhoto, MenuImageBBox } from "@/lib/api/menu";
+import { cropImageRegion } from "@/lib/cropMenuImage";
 import { Button } from "@/components/ui/button";
 
 interface RestaurantContextData {
