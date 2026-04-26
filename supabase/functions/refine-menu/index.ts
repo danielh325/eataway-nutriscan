@@ -221,76 +221,13 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Refining ${dishes.length} dishes with Gemini ensemble + verification...`);
+    console.log(`Refining ${dishes.length} dishes with Gemini Flash verification...`);
 
     const rc = restaurant_context || {};
 
-    // ═══ Step 1: Second model pass (re-analyze with image if provided) ═══
-    let secondDishes: any[] = [];
-
-    if (imageBase64 && mimeType) {
-      try {
-        const secondResponse = await callGemini(
-          GEMINI_API_KEY,
-          "gemini-2.5-pro",
-          [
-            { role: "system", content: `You are a nutrition analyst. Analyze this menu image and extract nutrition for ALL dishes. Use ranges (e.g. "650-800"). ${FEW_SHOT_EXAMPLES}` },
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Analyze every dish in this menu. Return structured nutrition with ranges. Call extract_menu_analysis." },
-                { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-              ],
-            },
-          ],
-          [EXTRACT_MENU_TOOL],
-          { type: "function", function: { name: "extract_menu_analysis" } }
-        );
-
-        if (secondResponse.ok) {
-          const secondData = await safeJsonFromResponse(secondResponse);
-          if (secondData) {
-            const secondParsed = extractParsed(secondData);
-            secondDishes = Array.isArray(secondParsed?.dishes) ? secondParsed.dishes : [];
-            console.log(`Gemini Pro returned ${secondDishes.length} dishes`);
-          }
-        } else {
-          const errText = await secondResponse.text();
-          console.warn("Gemini Pro failed:", secondResponse.status, errText.slice(0, 180));
-        }
-      } catch (e: any) {
-        console.warn("Ensemble error:", e?.message || e);
-      }
-    }
-
-    // ═══ Step 2: Reconcile ═══
+    // Skip the slow second image pass with Gemini 2.5 Pro — it added ~30s
+    // and frequently 429'd. Go directly to the lightweight verification pass.
     let refinedDishes = [...dishes];
-    if (secondDishes.length > 0) {
-      const secondMap = new Map<string, any>();
-      for (const d of secondDishes) secondMap.set(d.dish?.toLowerCase(), d);
-
-      refinedDishes = dishes.map((dish: any) => {
-        const match = secondMap.get(dish.dish?.toLowerCase());
-        if (!match?.nutrition || match.nutrition === "unavailable") return dish;
-        if (!dish.nutrition || dish.nutrition === "unavailable") return dish;
-
-        return {
-          ...dish,
-          nutrition: {
-            ...dish.nutrition,
-            calories_kcal: avgRange(dish.nutrition.calories_kcal, match.nutrition.calories_kcal),
-            protein_g: avgRange(dish.nutrition.protein_g, match.nutrition.protein_g),
-            carbs_g: avgRange(dish.nutrition.carbs_g, match.nutrition.carbs_g),
-            fat_g: avgRange(dish.nutrition.fat_g, match.nutrition.fat_g),
-            sodium_mg: avgRange(dish.nutrition.sodium_mg, match.nutrition.sodium_mg),
-          },
-          confidence_score: dish.confidence_score !== undefined && match.confidence_score !== undefined
-            ? (dish.confidence_score + match.confidence_score) / 2
-            : dish.confidence_score,
-          data_sources: [...new Set([...(dish.data_sources || []), ...(match.data_sources || []), "Ensemble (Gemini Pro)"])],
-        };
-      });
-    }
 
     // ═══ Step 3: Verification pass ═══
     const dishSummaries = refinedDishes.map((d: any) => {
