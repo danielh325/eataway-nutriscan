@@ -84,14 +84,6 @@ const EXTRACT_MENU_TOOL = {
               optional_removals: { type: "array", items: { type: "string" } },
               cooking_method: { type: "string" },
               portion_size_g: { type: "number" },
-              recipe: {
-                type: "object",
-                properties: {
-                  method: { type: "string" },
-                  key_quantities: { type: "array", items: { type: "string" } },
-                },
-                required: ["method", "key_quantities"],
-              },
               nutrition: {
                 type: "object",
                 properties: {
@@ -134,7 +126,7 @@ const EXTRACT_MENU_TOOL = {
               data_sources: { type: "array", items: { type: "string" } },
               notes: { type: "string" },
             },
-            required: ["dish", "search_term", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
+            required: ["dish", "search_term", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
           },
         },
       },
