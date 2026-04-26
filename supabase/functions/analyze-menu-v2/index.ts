@@ -29,15 +29,14 @@ COMPLETENESS IS CRITICAL:
 - If text is partially obscured, still include the dish with lower confidence.
 - After your first pass, do a SECOND pass to catch anything missed.
 
-Apply ALL verification methods:
+Apply these verification methods:
 1. Visual Ingredient Decomposition — identify every ingredient, hidden calorie sources (oils, sauces, dressings)
-2. Recipe Reconstruction — reconstruct professional recipe with exact quantities
-3. Database Cross-Reference — USDA, Nutritionix, CalorieKing mental database
-4. Contextual Calibration — adjust for restaurant type, cuisine, regional portions
-5. Sanity Check — verify macro-to-calorie ratios (P*4+C*4+F*9 ≈ total)
-6. Cooking Loss & Absorption — moisture loss, oil absorption factors
-7. Culinary Fingerprinting — identify by cuisine-specific preparation signatures
-8. Portion Size Estimation — use plate/bowl/container as size reference
+2. Database Cross-Reference — USDA, Nutritionix, CalorieKing mental database
+3. Contextual Calibration — adjust for restaurant type, cuisine, regional portions
+4. Sanity Check — verify macro-to-calorie ratios (P*4+C*4+F*9 ≈ total)
+5. Cooking Loss & Absorption — moisture loss, oil absorption factors
+6. Culinary Fingerprinting — identify by cuisine-specific preparation signatures
+7. Portion Size Estimation — use plate/bowl/container as size reference
 
 ${FEW_SHOT_EXAMPLES}
 
