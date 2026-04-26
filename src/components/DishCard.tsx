@@ -378,25 +378,7 @@ export const DishCard = ({ dish, index, onSave, isLoggedIn, externalImage, image
             </div>
           )}
 
-          {/* Recipe */}
-          {dish.recipe?.method && (
-            <div className="p-4 md:p-5 border-b border-border">
-              <div className="flex items-center gap-2 mb-2">
-                <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
-                <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Recipe</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">{dish.recipe.method}</p>
-              {dish.recipe.key_quantities && dish.recipe.key_quantities.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {dish.recipe.key_quantities.map((q, i) => (
-                    <span key={i} className="px-2 py-0.5 text-[10px] font-mono bg-secondary rounded-full border border-border">
-                      {q}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Recipe section removed */}
 
           {/* Allergens */}
           {dish.allergens && dish.allergens.length > 0 && (

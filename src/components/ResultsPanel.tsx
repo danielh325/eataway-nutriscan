@@ -206,7 +206,7 @@ export const ResultsPanel = ({ dishes, restaurantContext, onSaveDish, isLoggedIn
       optional_removals: dish.optional_removals || [],
       cooking_method: dish.cooking_method || null,
       portion_size_g: dish.portion_size_g || null,
-      recipe: dish.recipe || null,
+      // recipe removed from output
       per_ingredient_nutrition: dish.per_ingredient_nutrition || null,
       allergens: dish.allergens || [],
       data_sources: dish.data_sources || [],

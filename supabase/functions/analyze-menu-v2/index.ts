@@ -29,15 +29,14 @@ COMPLETENESS IS CRITICAL:
 - If text is partially obscured, still include the dish with lower confidence.
 - After your first pass, do a SECOND pass to catch anything missed.
 
-Apply ALL verification methods:
+Apply these verification methods:
 1. Visual Ingredient Decomposition — identify every ingredient, hidden calorie sources (oils, sauces, dressings)
-2. Recipe Reconstruction — reconstruct professional recipe with exact quantities
-3. Database Cross-Reference — USDA, Nutritionix, CalorieKing mental database
-4. Contextual Calibration — adjust for restaurant type, cuisine, regional portions
-5. Sanity Check — verify macro-to-calorie ratios (P*4+C*4+F*9 ≈ total)
-6. Cooking Loss & Absorption — moisture loss, oil absorption factors
-7. Culinary Fingerprinting — identify by cuisine-specific preparation signatures
-8. Portion Size Estimation — use plate/bowl/container as size reference
+2. Database Cross-Reference — USDA, Nutritionix, CalorieKing mental database
+3. Contextual Calibration — adjust for restaurant type, cuisine, regional portions
+4. Sanity Check — verify macro-to-calorie ratios (P*4+C*4+F*9 ≈ total)
+5. Cooking Loss & Absorption — moisture loss, oil absorption factors
+6. Culinary Fingerprinting — identify by cuisine-specific preparation signatures
+7. Portion Size Estimation — use plate/bowl/container as size reference
 
 ${FEW_SHOT_EXAMPLES}
 
@@ -85,14 +84,6 @@ const EXTRACT_MENU_TOOL = {
               optional_removals: { type: "array", items: { type: "string" } },
               cooking_method: { type: "string" },
               portion_size_g: { type: "number" },
-              recipe: {
-                type: "object",
-                properties: {
-                  method: { type: "string" },
-                  key_quantities: { type: "array", items: { type: "string" } },
-                },
-                required: ["method", "key_quantities"],
-              },
               nutrition: {
                 type: "object",
                 properties: {
@@ -135,7 +126,7 @@ const EXTRACT_MENU_TOOL = {
               data_sources: { type: "array", items: { type: "string" } },
               notes: { type: "string" },
             },
-            required: ["dish", "search_term", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "recipe", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
+            required: ["dish", "search_term", "confidence", "confidence_score", "ingredients_detected", "default_ingredients", "optional_additions", "optional_removals", "cooking_method", "portion_size_g", "nutrition", "per_ingredient_nutrition", "allergens", "has_image_in_menu", "data_sources"],
           },
         },
       },
@@ -201,91 +192,8 @@ function extractUSDANutrition(result: USDAResult): Record<string, number> {
   return nutrients;
 }
 
-// ─── Open Food Facts API (completely free, no key) ──────────────────────────
-
-interface OFFResult {
-  product_name: string;
-  nutriments: Record<string, number>;
-}
-
-async function queryOpenFoodFacts(searchTerm: string): Promise<OFFResult | null> {
-  try {
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(searchTerm)}&search_simple=1&action=process&json=1&page_size=3&fields=product_name,nutriments`;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const products = data?.products;
-    if (!Array.isArray(products) || products.length === 0) return null;
-    const p = products[0];
-    return {
-      product_name: p.product_name || "",
-      nutriments: p.nutriments || {},
-    };
-  } catch (e) {
-    console.warn("Open Food Facts query failed for:", searchTerm, e);
-    return null;
-  }
-}
-
-function extractOFFNutrition(result: OFFResult): Record<string, number> {
-  const n = result.nutriments;
-  const out: Record<string, number> = {};
-  // OFF stores per 100g values with _100g suffix
-  if (n["energy-kcal_100g"]) out.calories_kcal = n["energy-kcal_100g"];
-  else if (n["energy-kcal"]) out.calories_kcal = n["energy-kcal"];
-  if (n["proteins_100g"]) out.protein_g = n["proteins_100g"];
-  else if (n["proteins"]) out.protein_g = n["proteins"];
-  if (n["carbohydrates_100g"]) out.carbs_g = n["carbohydrates_100g"];
-  else if (n["carbohydrates"]) out.carbs_g = n["carbohydrates"];
-  if (n["fat_100g"]) out.fat_g = n["fat_100g"];
-  else if (n["fat"]) out.fat_g = n["fat"];
-  if (n["fiber_100g"]) out.fiber_g = n["fiber_100g"];
-  if (n["sodium_100g"]) out.sodium_mg = n["sodium_100g"] * 1000; // g to mg
-  if (n["sugars_100g"]) out.sugar_g = n["sugars_100g"];
-  return out;
-}
-
-// ─── Lovable AI Nutrition Verification (free, no API key) ──────────────────
-
-async function queryLovableAI(dishName: string, portionG: number): Promise<Record<string, number> | null> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !supabaseKey) return null;
-
-  try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/ai`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "system",
-            content: "You are a nutrition database. Return ONLY a JSON object with numeric values for a single serving. Keys: calories_kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, sugar_g. No explanation.",
-          },
-          {
-            role: "user",
-            content: `Nutrition facts for ${portionG}g of: ${dishName}`,
-          },
-        ],
-        model: "google/gemini-3-flash-preview",
-      }),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const content = data?.choices?.[0]?.message?.content || "";
-    let cleaned = content.trim();
-    if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    const parsed = JSON.parse(cleaned);
-    if (typeof parsed?.calories_kcal === "number") return parsed;
-    return null;
-  } catch (e) {
-    console.warn("Lovable AI nutrition query failed:", e);
-    return null;
-  }
-}
+// (Open Food Facts and per-dish Lovable AI verification removed for speed —
+//  OFF was blocked from Supabase egress and AI per-dish added 29+ extra LLM calls)
 
 // ─── ENSEMBLE MERGE ─────────────────────────────────────────────────────────
 
@@ -429,86 +337,23 @@ Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE res
 
 // ─── ENSEMBLE: Run 2 models in parallel ─────────────────────────────────────
 
-async function runEnsemble(
+// ─── SINGLE-MODEL CALL (Flash only — Pro added ~20s for marginal gain;
+//     refine-menu does the cross-check pass) ──────────────────────────────
+async function runPrimary(
   apiKey: string,
   imageBase64: string,
   mimeType: string,
   ocrText?: string
 ): Promise<{ dishes: any[]; restaurant_context: any; model_agreement: number }> {
-  const [proResult, flashResult] = await Promise.allSettled([
-    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType, ocrText),
-    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType, ocrText),
-  ]);
-
-  const proData = proResult.status === "fulfilled" && !proResult.value?.error ? proResult.value : null;
-  const flashData = flashResult.status === "fulfilled" && !flashResult.value?.error ? flashResult.value : null;
-
-  if (!proData && !flashData) {
-    throw new Error("Both AI models failed");
+  const result = await callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType, ocrText);
+  if (!result || result.error) {
+    throw new Error(`Flash model failed${result?.status ? `: ${result.status}` : ""}`);
   }
-
-  // Prefer Pro as primary, Flash as secondary
-  const primary = proData || flashData;
-  const secondary = proData ? flashData : null;
-
-  const primaryDishes = Array.isArray(primary) ? primary : (primary?.dishes || []);
-  const secondaryDishes = secondary ? (Array.isArray(secondary) ? secondary : (secondary?.dishes || [])) : [];
-
-  // Merge: use primary dish list, cross-check nutrition with secondary
-  let modelAgreement = 1.0;
-
-  if (secondaryDishes.length > 0) {
-    const secondaryMap = new Map<string, any>();
-    for (const d of secondaryDishes) {
-      secondaryMap.set(d.dish?.toLowerCase()?.trim(), d);
-    }
-
-    let agreements = 0;
-    let comparisons = 0;
-
-    for (const dish of primaryDishes) {
-      const match = secondaryMap.get(dish.dish?.toLowerCase()?.trim());
-      if (match && match.nutrition && dish.nutrition) {
-        comparisons++;
-        const priCal = parseMid(dish.nutrition.calories_kcal);
-        const secCal = parseMid(match.nutrition.calories_kcal);
-        if (priCal > 0 && secCal > 0) {
-          const deviation = Math.abs(priCal - secCal) / Math.max(priCal, secCal);
-          if (deviation < 0.15) agreements++;
-          // Average the estimates for better accuracy
-          dish.nutrition.calories_kcal = rangeFromTwo(priCal, secCal);
-          dish.nutrition.protein_g = rangeFromTwo(
-            parseMid(dish.nutrition.protein_g),
-            parseMid(match.nutrition.protein_g)
-          );
-          dish.nutrition.carbs_g = rangeFromTwo(
-            parseMid(dish.nutrition.carbs_g),
-            parseMid(match.nutrition.carbs_g)
-          );
-          dish.nutrition.fat_g = rangeFromTwo(
-            parseMid(dish.nutrition.fat_g),
-            parseMid(match.nutrition.fat_g)
-          );
-        }
-      }
-    }
-
-    // Add any dishes found by secondary but missed by primary
-    for (const [name, d] of secondaryMap) {
-      if (!primaryDishes.some((p: any) => p.dish?.toLowerCase()?.trim() === name)) {
-        d.notes = (d.notes || "") + " [Found by secondary model only]";
-        d.confidence_score = Math.min(d.confidence_score || 0.5, 0.6);
-        primaryDishes.push(d);
-      }
-    }
-
-    modelAgreement = comparisons > 0 ? agreements / comparisons : 0.5;
-  }
-
+  const dishes = Array.isArray(result) ? result : (result?.dishes || []);
   return {
-    dishes: primaryDishes,
-    restaurant_context: primary?.restaurant_context || null,
-    model_agreement: modelAgreement,
+    dishes,
+    restaurant_context: result?.restaurant_context || null,
+    model_agreement: 1.0, // single-model run
   };
 }
 
@@ -546,55 +391,34 @@ serve(async (req) => {
       );
     }
 
-    // ─── STAGE 1: Multi-model ensemble ────────────────────────────────
+    // ─── STAGE 1: Single-model extraction (Flash) ─────────────────────
     console.log(
-      `Stage 1: Running dual-model ensemble (Pro + Flash)${ocrText ? ` with OCR pre-pass (${ocrText.length} chars)` : ""}...`
+      `Stage 1: Running Gemini Flash${ocrText ? ` with OCR pre-pass (${ocrText.length} chars)` : ""}...`
     );
-    const ensemble = await runEnsemble(GEMINI_API_KEY, imageBase64, mimeType, ocrText);
-    console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes, agreement: ${(ensemble.model_agreement * 100).toFixed(0)}%`);
+    const ensemble = await runPrimary(GEMINI_API_KEY, imageBase64, mimeType, ocrText);
+    console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes`);
 
-    // ─── STAGE 2: Cross-reference with external databases ─────────────
-    console.log("Stage 2: Cross-referencing with USDA + OpenFoodFacts + Lovable AI...");
+    // ─── STAGE 2: USDA cross-reference (fast, free, no LLM) ───────────
+    // OpenFoodFacts is blocked from Supabase (ECONNREFUSED), removed.
+    // Per-dish Lovable AI verification removed — refine-menu does the LLM check.
+    console.log("Stage 2: Cross-referencing with USDA...");
 
     const enrichedDishes = await Promise.all(
       ensemble.dishes.map(async (dish: any) => {
         const searchTerm = dish.search_term || dish.dish;
         const portionG = dish.portion_size_g || 200;
 
-        // Query all 3 sources in parallel
-        const [usdaResult, offResult, aiResult] = await Promise.allSettled([
-          queryUSDA(searchTerm),
-          queryOpenFoodFacts(searchTerm),
-          queryLovableAI(searchTerm, portionG),
-        ]);
-
+        const usdaResult = await queryUSDA(searchTerm).catch(() => null);
         const sources: NutritionSource[] = [];
 
-        if (usdaResult.status === "fulfilled" && usdaResult.value) {
+        if (usdaResult) {
           sources.push({
             source: "USDA FoodData Central",
             per100g: true,
-            data: extractUSDANutrition(usdaResult.value),
+            data: extractUSDANutrition(usdaResult),
           });
         }
 
-        if (offResult.status === "fulfilled" && offResult.value) {
-          sources.push({
-            source: "Open Food Facts",
-            per100g: true,
-            data: extractOFFNutrition(offResult.value),
-          });
-        }
-
-        if (aiResult.status === "fulfilled" && aiResult.value) {
-          sources.push({
-            source: "Lovable AI Verification",
-            per100g: false,
-            data: aiResult.value,
-          });
-        }
-
-        // Merge all sources
         if (sources.length > 0 && dish.nutrition) {
           const { merged, data_sources, deviation_flags } = mergeNutritionSources(
             dish.nutrition,
@@ -604,21 +428,19 @@ serve(async (req) => {
           dish.nutrition = { ...dish.nutrition, ...merged };
           dish.data_sources = data_sources;
           if (deviation_flags.length > 0) {
-            dish.verification_notes = `Cross-reference deviations: ${deviation_flags.join("; ")}`;
+            dish.verification_notes = `USDA deviations: ${deviation_flags.join("; ")}`;
           }
         } else {
-          dish.data_sources = ["AI (Gemini ensemble)"];
+          dish.data_sources = ["AI (Gemini Flash)"];
         }
 
         return dish;
       })
     );
 
-    console.log(`Stage 2 complete: ${enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length}/${enrichedDishes.length} dishes cross-referenced`);
+    console.log(`Stage 2 complete: ${enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length}/${enrichedDishes.length} dishes USDA-matched`);
 
     // ─── STAGE 3: Sanity audit ────────────────────────────────────────
-    console.log("Stage 3: Running sanity audit...");
-
     for (const dish of enrichedDishes) {
       if (!dish.nutrition || typeof dish.nutrition !== "object") continue;
 
@@ -632,7 +454,6 @@ serve(async (req) => {
       if (midCal > 0 && Math.abs(computed - midCal) / midCal > 0.15) {
         dish.verification_notes = (dish.verification_notes || "") +
           ` [Macro audit: computed ${Math.round(computed)} vs stated ${Math.round(midCal)} kcal]`;
-        // Auto-correct: use computed value if AI + DB disagree
         if (dish.data_sources?.length > 1) {
           dish.nutrition.calories_kcal = `${Math.round(computed * 0.95)}-${Math.round(computed * 1.05)}`;
         }
@@ -645,29 +466,25 @@ serve(async (req) => {
         dish.confidence_score = Math.min(dish.confidence_score || 0.5, 0.4);
       }
 
-      // Composite confidence: factor in model agreement + database coverage
-      const dbCoverage = (dish.data_sources?.length || 1) / 4; // 4 = max sources
+      // Composite confidence: base + DB coverage
+      const dbCoverage = (dish.data_sources?.length || 1) / 2;
       const baseConf = dish.confidence_score || 0.5;
-      dish.confidence_score = Math.round(
-        (baseConf * 0.5 + ensemble.model_agreement * 0.25 + dbCoverage * 0.25) * 100
-      ) / 100;
+      dish.confidence_score = Math.round((baseConf * 0.7 + dbCoverage * 0.3) * 100) / 100;
 
-      // Update confidence label based on score
       if (dish.confidence_score >= 0.7) dish.confidence = "high";
       else if (dish.confidence_score >= 0.45) dish.confidence = "medium";
       else dish.confidence = "low";
     }
 
-    console.log("Stage 3 complete. Pipeline finished.");
-    console.log(`Final: ${enrichedDishes.length} dishes, avg confidence: ${(enrichedDishes.reduce((s: number, d: any) => s + (d.confidence_score || 0), 0) / enrichedDishes.length * 100).toFixed(0)}%`);
+    console.log(`Pipeline finished: ${enrichedDishes.length} dishes`);
 
     return new Response(
       JSON.stringify({
         dishes: enrichedDishes,
         restaurant_context: ensemble.restaurant_context,
         pipeline: {
-          models_used: ["gemini-3.1-pro-preview", "gemini-3-flash-preview"],
-          databases_queried: ["USDA FoodData Central", "Open Food Facts", "Lovable AI Verification"],
+          models_used: ["gemini-3-flash-preview"],
+          databases_queried: ["USDA FoodData Central"],
           model_agreement: ensemble.model_agreement,
           dishes_cross_referenced: enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length,
           total_dishes: enrichedDishes.length,
