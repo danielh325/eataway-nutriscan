@@ -474,55 +474,34 @@ serve(async (req) => {
       );
     }
 
-    // ─── STAGE 1: Multi-model ensemble ────────────────────────────────
+    // ─── STAGE 1: Single-model extraction (Flash) ─────────────────────
     console.log(
-      `Stage 1: Running dual-model ensemble (Pro + Flash)${ocrText ? ` with OCR pre-pass (${ocrText.length} chars)` : ""}...`
+      `Stage 1: Running Gemini Flash${ocrText ? ` with OCR pre-pass (${ocrText.length} chars)` : ""}...`
     );
-    const ensemble = await runEnsemble(GEMINI_API_KEY, imageBase64, mimeType, ocrText);
-    console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes, agreement: ${(ensemble.model_agreement * 100).toFixed(0)}%`);
+    const ensemble = await runPrimary(GEMINI_API_KEY, imageBase64, mimeType, ocrText);
+    console.log(`Stage 1 complete: ${ensemble.dishes.length} dishes`);
 
-    // ─── STAGE 2: Cross-reference with external databases ─────────────
-    console.log("Stage 2: Cross-referencing with USDA + OpenFoodFacts + Lovable AI...");
+    // ─── STAGE 2: USDA cross-reference (fast, free, no LLM) ───────────
+    // OpenFoodFacts is blocked from Supabase (ECONNREFUSED), removed.
+    // Per-dish Lovable AI verification removed — refine-menu does the LLM check.
+    console.log("Stage 2: Cross-referencing with USDA...");
 
     const enrichedDishes = await Promise.all(
       ensemble.dishes.map(async (dish: any) => {
         const searchTerm = dish.search_term || dish.dish;
         const portionG = dish.portion_size_g || 200;
 
-        // Query all 3 sources in parallel
-        const [usdaResult, offResult, aiResult] = await Promise.allSettled([
-          queryUSDA(searchTerm),
-          queryOpenFoodFacts(searchTerm),
-          queryLovableAI(searchTerm, portionG),
-        ]);
-
+        const usdaResult = await queryUSDA(searchTerm).catch(() => null);
         const sources: NutritionSource[] = [];
 
-        if (usdaResult.status === "fulfilled" && usdaResult.value) {
+        if (usdaResult) {
           sources.push({
             source: "USDA FoodData Central",
             per100g: true,
-            data: extractUSDANutrition(usdaResult.value),
+            data: extractUSDANutrition(usdaResult),
           });
         }
 
-        if (offResult.status === "fulfilled" && offResult.value) {
-          sources.push({
-            source: "Open Food Facts",
-            per100g: true,
-            data: extractOFFNutrition(offResult.value),
-          });
-        }
-
-        if (aiResult.status === "fulfilled" && aiResult.value) {
-          sources.push({
-            source: "Lovable AI Verification",
-            per100g: false,
-            data: aiResult.value,
-          });
-        }
-
-        // Merge all sources
         if (sources.length > 0 && dish.nutrition) {
           const { merged, data_sources, deviation_flags } = mergeNutritionSources(
             dish.nutrition,
@@ -532,21 +511,19 @@ serve(async (req) => {
           dish.nutrition = { ...dish.nutrition, ...merged };
           dish.data_sources = data_sources;
           if (deviation_flags.length > 0) {
-            dish.verification_notes = `Cross-reference deviations: ${deviation_flags.join("; ")}`;
+            dish.verification_notes = `USDA deviations: ${deviation_flags.join("; ")}`;
           }
         } else {
-          dish.data_sources = ["AI (Gemini ensemble)"];
+          dish.data_sources = ["AI (Gemini Flash)"];
         }
 
         return dish;
       })
     );
 
-    console.log(`Stage 2 complete: ${enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length}/${enrichedDishes.length} dishes cross-referenced`);
+    console.log(`Stage 2 complete: ${enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length}/${enrichedDishes.length} dishes USDA-matched`);
 
     // ─── STAGE 3: Sanity audit ────────────────────────────────────────
-    console.log("Stage 3: Running sanity audit...");
-
     for (const dish of enrichedDishes) {
       if (!dish.nutrition || typeof dish.nutrition !== "object") continue;
 
@@ -560,7 +537,6 @@ serve(async (req) => {
       if (midCal > 0 && Math.abs(computed - midCal) / midCal > 0.15) {
         dish.verification_notes = (dish.verification_notes || "") +
           ` [Macro audit: computed ${Math.round(computed)} vs stated ${Math.round(midCal)} kcal]`;
-        // Auto-correct: use computed value if AI + DB disagree
         if (dish.data_sources?.length > 1) {
           dish.nutrition.calories_kcal = `${Math.round(computed * 0.95)}-${Math.round(computed * 1.05)}`;
         }
@@ -573,29 +549,25 @@ serve(async (req) => {
         dish.confidence_score = Math.min(dish.confidence_score || 0.5, 0.4);
       }
 
-      // Composite confidence: factor in model agreement + database coverage
-      const dbCoverage = (dish.data_sources?.length || 1) / 4; // 4 = max sources
+      // Composite confidence: base + DB coverage
+      const dbCoverage = (dish.data_sources?.length || 1) / 2;
       const baseConf = dish.confidence_score || 0.5;
-      dish.confidence_score = Math.round(
-        (baseConf * 0.5 + ensemble.model_agreement * 0.25 + dbCoverage * 0.25) * 100
-      ) / 100;
+      dish.confidence_score = Math.round((baseConf * 0.7 + dbCoverage * 0.3) * 100) / 100;
 
-      // Update confidence label based on score
       if (dish.confidence_score >= 0.7) dish.confidence = "high";
       else if (dish.confidence_score >= 0.45) dish.confidence = "medium";
       else dish.confidence = "low";
     }
 
-    console.log("Stage 3 complete. Pipeline finished.");
-    console.log(`Final: ${enrichedDishes.length} dishes, avg confidence: ${(enrichedDishes.reduce((s: number, d: any) => s + (d.confidence_score || 0), 0) / enrichedDishes.length * 100).toFixed(0)}%`);
+    console.log(`Pipeline finished: ${enrichedDishes.length} dishes`);
 
     return new Response(
       JSON.stringify({
         dishes: enrichedDishes,
         restaurant_context: ensemble.restaurant_context,
         pipeline: {
-          models_used: ["gemini-3.1-pro-preview", "gemini-3-flash-preview"],
-          databases_queried: ["USDA FoodData Central", "Open Food Facts", "Lovable AI Verification"],
+          models_used: ["gemini-3-flash-preview"],
+          databases_queried: ["USDA FoodData Central"],
           model_agreement: ensemble.model_agreement,
           dishes_cross_referenced: enrichedDishes.filter((d: any) => d.data_sources?.length > 1).length,
           total_dishes: enrichedDishes.length,
