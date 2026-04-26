@@ -420,86 +420,23 @@ Use ALL 7 verification methods. Call extract_menu_analysis with the COMPLETE res
 
 // ─── ENSEMBLE: Run 2 models in parallel ─────────────────────────────────────
 
-async function runEnsemble(
+// ─── SINGLE-MODEL CALL (Flash only — Pro added ~20s for marginal gain;
+//     refine-menu does the cross-check pass) ──────────────────────────────
+async function runPrimary(
   apiKey: string,
   imageBase64: string,
   mimeType: string,
   ocrText?: string
 ): Promise<{ dishes: any[]; restaurant_context: any; model_agreement: number }> {
-  const [proResult, flashResult] = await Promise.allSettled([
-    callGemini("gemini-3.1-pro-preview", apiKey, imageBase64, mimeType, ocrText),
-    callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType, ocrText),
-  ]);
-
-  const proData = proResult.status === "fulfilled" && !proResult.value?.error ? proResult.value : null;
-  const flashData = flashResult.status === "fulfilled" && !flashResult.value?.error ? flashResult.value : null;
-
-  if (!proData && !flashData) {
-    throw new Error("Both AI models failed");
+  const result = await callGemini("gemini-3-flash-preview", apiKey, imageBase64, mimeType, ocrText);
+  if (!result || result.error) {
+    throw new Error(`Flash model failed${result?.status ? `: ${result.status}` : ""}`);
   }
-
-  // Prefer Pro as primary, Flash as secondary
-  const primary = proData || flashData;
-  const secondary = proData ? flashData : null;
-
-  const primaryDishes = Array.isArray(primary) ? primary : (primary?.dishes || []);
-  const secondaryDishes = secondary ? (Array.isArray(secondary) ? secondary : (secondary?.dishes || [])) : [];
-
-  // Merge: use primary dish list, cross-check nutrition with secondary
-  let modelAgreement = 1.0;
-
-  if (secondaryDishes.length > 0) {
-    const secondaryMap = new Map<string, any>();
-    for (const d of secondaryDishes) {
-      secondaryMap.set(d.dish?.toLowerCase()?.trim(), d);
-    }
-
-    let agreements = 0;
-    let comparisons = 0;
-
-    for (const dish of primaryDishes) {
-      const match = secondaryMap.get(dish.dish?.toLowerCase()?.trim());
-      if (match && match.nutrition && dish.nutrition) {
-        comparisons++;
-        const priCal = parseMid(dish.nutrition.calories_kcal);
-        const secCal = parseMid(match.nutrition.calories_kcal);
-        if (priCal > 0 && secCal > 0) {
-          const deviation = Math.abs(priCal - secCal) / Math.max(priCal, secCal);
-          if (deviation < 0.15) agreements++;
-          // Average the estimates for better accuracy
-          dish.nutrition.calories_kcal = rangeFromTwo(priCal, secCal);
-          dish.nutrition.protein_g = rangeFromTwo(
-            parseMid(dish.nutrition.protein_g),
-            parseMid(match.nutrition.protein_g)
-          );
-          dish.nutrition.carbs_g = rangeFromTwo(
-            parseMid(dish.nutrition.carbs_g),
-            parseMid(match.nutrition.carbs_g)
-          );
-          dish.nutrition.fat_g = rangeFromTwo(
-            parseMid(dish.nutrition.fat_g),
-            parseMid(match.nutrition.fat_g)
-          );
-        }
-      }
-    }
-
-    // Add any dishes found by secondary but missed by primary
-    for (const [name, d] of secondaryMap) {
-      if (!primaryDishes.some((p: any) => p.dish?.toLowerCase()?.trim() === name)) {
-        d.notes = (d.notes || "") + " [Found by secondary model only]";
-        d.confidence_score = Math.min(d.confidence_score || 0.5, 0.6);
-        primaryDishes.push(d);
-      }
-    }
-
-    modelAgreement = comparisons > 0 ? agreements / comparisons : 0.5;
-  }
-
+  const dishes = Array.isArray(result) ? result : (result?.dishes || []);
   return {
-    dishes: primaryDishes,
-    restaurant_context: primary?.restaurant_context || null,
-    model_agreement: modelAgreement,
+    dishes,
+    restaurant_context: result?.restaurant_context || null,
+    model_agreement: 1.0, // single-model run
   };
 }
 
