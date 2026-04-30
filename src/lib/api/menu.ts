@@ -144,27 +144,15 @@ export interface VerifyDishPhotoResult {
   is_food_photo: boolean;
 }
 
+// verify-dish-photo edge function was removed in favor of local CLIP verification
+// (see src/lib/clipVerify.ts). This stub is kept only for type compatibility.
 export async function verifyDishPhoto(
-  imageBase64: string,
-  mimeType: string,
-  dishName: string,
-  candidateDishes: string[]
+  _imageBase64: string,
+  _mimeType: string,
+  _dishName: string,
+  _candidateDishes: string[]
 ): Promise<VerifyDishPhotoResult | null> {
-  try {
-    const { data, error } = await supabase.functions.invoke("verify-dish-photo", {
-      body: { imageBase64, mimeType, dish_name: dishName, candidate_dishes: candidateDishes },
-    });
-    if (error) {
-      const message = await getInvokeErrorMessage(error, "Verification failed");
-      console.warn("verifyDishPhoto error:", message);
-      return null;
-    }
-    if (!data || data.error) return null;
-    return data as VerifyDishPhotoResult;
-  } catch (err) {
-    console.warn("verifyDishPhoto failed:", err);
-    return null;
-  }
+  return null;
 }
 
 function fileToBase64(file: File): Promise<string> {
