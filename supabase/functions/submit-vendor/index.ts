@@ -6,19 +6,57 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MAX_BASE64_BYTES = 8 * 1024 * 1024;
+const ALLOWED_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "image/heif"]);
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require authenticated user (not anon) — submitting vendors is a member action
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const authClient = createClient(
+    Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+  const token = authHeader.replace("Bearer ", "");
+  const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+  if (claimsError || !claimsData?.claims || claimsData.claims.role !== "authenticated") {
+    return new Response(JSON.stringify({ error: "Sign in required to submit a vendor" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const authedUserId = claimsData.claims.sub as string;
+
   try {
-    const { name, address, cuisine, userId, menuImageBase64, menuImageMimeType } = await req.json();
+    const { name, address, cuisine, menuImageBase64, menuImageMimeType } = await req.json();
+    // Always trust the authenticated user id from the JWT, not the client payload
+    const userId = authedUserId;
 
     if (!name || !address) {
       return new Response(JSON.stringify({ error: "Name and address are required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (typeof menuImageBase64 === "string") {
+      if (menuImageBase64.length > MAX_BASE64_BYTES) {
+        return new Response(JSON.stringify({ error: "Menu image too large (max ~6MB)" }), {
+          status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (menuImageMimeType && !ALLOWED_MIMES.has(String(menuImageMimeType).toLowerCase())) {
+        return new Response(JSON.stringify({ error: "Unsupported menu image type" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const supabase = createClient(
