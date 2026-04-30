@@ -399,6 +399,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const unauthorized = await requireValidJwt(req);
+  if (unauthorized) return unauthorized;
+
   try {
     let body: any;
     try {
@@ -411,9 +414,21 @@ serve(async (req) => {
     }
 
     const { imageBase64, mimeType, ocrText } = body;
-    if (!imageBase64) {
+    if (!imageBase64 || typeof imageBase64 !== "string") {
       return new Response(
         JSON.stringify({ error: "No image provided" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (imageBase64.length > MAX_BASE64_BYTES) {
+      return new Response(
+        JSON.stringify({ error: "Image too large (max ~6MB)" }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (mimeType && !ALLOWED_MIMES.has(String(mimeType).toLowerCase())) {
+      return new Response(
+        JSON.stringify({ error: "Unsupported image type" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
