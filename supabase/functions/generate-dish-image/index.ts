@@ -73,6 +73,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const unauthorized = await requireValidJwt(req);
+  if (unauthorized) return unauthorized;
+
   try {
     let payload: { dish_name?: string; cooking_method?: string; ingredients?: string[] };
     try {
