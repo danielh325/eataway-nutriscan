@@ -325,7 +325,69 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vendor_suggestions_public: {
+        Row: {
+          address: string | null
+          categories: string[] | null
+          created_at: string | null
+          cuisine: string | null
+          description: string | null
+          hours: string | null
+          id: string | null
+          image: string | null
+          lat: number | null
+          lng: number | null
+          menu_image_url: string | null
+          name: string | null
+          place_id: string | null
+          price_range: string | null
+          rating: number | null
+          review_count: number | null
+          status: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          address?: string | null
+          categories?: string[] | null
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          hours?: string | null
+          id?: string | null
+          image?: string | null
+          lat?: number | null
+          lng?: number | null
+          menu_image_url?: string | null
+          name?: string | null
+          place_id?: string | null
+          price_range?: string | null
+          rating?: number | null
+          review_count?: number | null
+          status?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          address?: string | null
+          categories?: string[] | null
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          hours?: string | null
+          id?: string | null
+          image?: string | null
+          lat?: number | null
+          lng?: number | null
+          menu_image_url?: string | null
+          name?: string | null
+          place_id?: string | null
+          price_range?: string | null
+          rating?: number | null
+          review_count?: number | null
+          status?: string | null
+          verified?: boolean | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
