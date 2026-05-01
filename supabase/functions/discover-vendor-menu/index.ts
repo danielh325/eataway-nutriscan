@@ -38,8 +38,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const unauthorized = await requireValidJwt(req);
-  if (unauthorized) return unauthorized;
+  // Public endpoint — vendor menu discovery is guest-accessible per access model.
 
   try {
     const { spotName, address, menuHighlights, forceRefresh, quality, allowAiFallback } =
