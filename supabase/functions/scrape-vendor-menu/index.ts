@@ -69,8 +69,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const unauthorized = await requireValidJwt(req);
-  if (unauthorized) return unauthorized;
+  // Public endpoint — called by discover-vendor-menu for guest browsing.
 
   try {
     const { spotName, address, forceRefresh } = await req.json();
